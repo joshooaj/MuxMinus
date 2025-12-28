@@ -606,11 +606,11 @@ async def list_jobs(
 # General Endpoints
 # ============================================================================
 
-@app.get("/")
-async def root():
-    """Health check endpoint."""
+@app.get("/api")
+async def api_info():
+    """API information endpoint."""
     return {
-        "service": "Demucs Audio Separation API",
+        "service": "ReStem Audio Separation API",
         "status": "running",
         "version": "2.0.0",
         "features": ["authentication", "credit_system", "job_tracking"]
@@ -621,8 +621,33 @@ async def root():
 # Frontend Routes
 # ============================================================================
 
-@app.get("/app/", response_class=HTMLResponse)
-@app.get("/app", response_class=HTMLResponse)
+@app.get("/app.js")
+async def serve_js():
+    """Serve the main JavaScript file."""
+    try:
+        file_location = Path("/app/frontend/app.js")
+        if file_location.exists():
+            return FileResponse(file_location)
+        raise HTTPException(status_code=404, detail="File not found")
+    except Exception as e:
+        logger.error(f"Error serving JS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/styles.css")
+async def serve_css():
+    """Serve the main CSS file."""
+    try:
+        file_location = Path("/app/frontend/styles.css")
+        if file_location.exists():
+            return FileResponse(file_location)
+        raise HTTPException(status_code=404, detail="File not found")
+    except Exception as e:
+        logger.error(f"Error serving CSS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
     """Serve the frontend application."""
     try:
@@ -640,23 +665,6 @@ async def serve_frontend():
             raise HTTPException(status_code=404, detail="Frontend not found")
     except Exception as e:
         logger.error(f"Error serving frontend: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/app/{file_path:path}")
-async def serve_static_files(file_path: str):
-    """Serve static frontend files (CSS, JS, images)."""
-    try:
-        file_location = Path(f"/app/frontend/{file_path}")
-        logger.info(f"Attempting to serve static file: {file_location}")
-        
-        if file_location.exists() and file_location.is_file():
-            return FileResponse(file_location)
-        
-        logger.error(f"Static file not found: {file_location}")
-        raise HTTPException(status_code=404, detail="File not found")
-    except Exception as e:
-        logger.error(f"Error serving static file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
