@@ -70,7 +70,12 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
+    allow_origins=[
+        "http://localhost:8000",
+        "http://localhost",
+        "https://restem.joshooaj.com",
+        "*"  # Fallback for development
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

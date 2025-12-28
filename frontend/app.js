@@ -1,5 +1,6 @@
 // ReStem - Main Application
-const API_URL = 'http://localhost:8000';
+// Use empty string for relative URLs (works with reverse proxy)
+const API_URL = '';
 let currentToken = localStorage.getItem('token');
 let currentUser = null;
 let squarePayments = null;
