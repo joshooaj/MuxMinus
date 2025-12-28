@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ReStem - Professional Audio Source Separation</title>
     <link rel="stylesheet" href="styles.css">
+    <script type="text/javascript" src="https://sandbox.web.squarecdn.com/v1/square.js"></script>
 </head>
 <body>
     <!-- Login Page -->
@@ -183,42 +184,51 @@
             </div>
 
             <div class="pricing-grid">
-                <div class="pricing-card" onclick="purchaseCredits(5, 1.00)">
+                <div class="pricing-card" onclick="selectCreditPackage(5, 1.00)">
                     <h3>Starter</h3>
                     <div class="pricing-amount">5</div>
                     <div class="pricing-credits">credits</div>
                     <div class="pricing-price">$1.00</div>
                     <div class="pricing-per-credit">$0.20 per credit</div>
-                    <button class="btn">Buy Now</button>
+                    <button class="btn">Select</button>
                 </div>
 
-                <div class="pricing-card featured" onclick="purchaseCredits(25, 4.00)">
+                <div class="pricing-card featured" onclick="selectCreditPackage(25, 4.00)">
                     <div class="pricing-badge">BEST VALUE</div>
                     <h3>Popular</h3>
                     <div class="pricing-amount">25</div>
                     <div class="pricing-credits">credits</div>
                     <div class="pricing-price">$4.00</div>
                     <div class="pricing-per-credit">$0.16 per credit</div>
-                    <button class="btn">Buy Now</button>
+                    <button class="btn">Select</button>
                 </div>
 
-                <div class="pricing-card" onclick="purchaseCredits(100, 15.00)">
+                <div class="pricing-card" onclick="selectCreditPackage(100, 15.00)">
                     <h3>Pro</h3>
                     <div class="pricing-amount">100</div>
                     <div class="pricing-credits">credits</div>
                     <div class="pricing-price">$15.00</div>
                     <div class="pricing-per-credit">$0.15 per credit</div>
-                    <button class="btn">Buy Now</button>
+                    <button class="btn">Select</button>
                 </div>
+            </div>
+
+            <div class="dashboard-card" id="payment-section" style="display: none;">
+                <h3>💳 Complete Your Purchase</h3>
+                <p id="selected-package" style="font-size: 1.2rem; margin-bottom: 20px;"></p>
+                
+                <div id="square-payment-form">
+                    <div id="card-container" style="max-width: 500px; margin: 0 auto;"></div>
+                    <div id="payment-status" style="margin-top: 20px;"></div>
+                    <button id="card-button" class="btn" style="max-width: 500px; margin: 20px auto;">Pay Now</button>
+                </div>
+                
+                <button class="btn btn-secondary" onclick="cancelPayment()" style="max-width: 500px; margin: 10px auto;">Cancel</button>
             </div>
 
             <div class="dashboard-card" style="text-align: center;">
                 <h3>🔒 Secure Payment with Square</h3>
                 <p style="color: #6b7280; margin-bottom: 20px;">All transactions are encrypted and secure. We never store your payment information.</p>
-                <div id="square-payment-form">
-                    <!-- Square payment form will be integrated here in Phase 2 -->
-                    <p style="color: #3b82f6; font-style: italic;">Payment processing integration coming soon...</p>
-                </div>
                 <button class="btn btn-secondary" onclick="showPage('dashboard')" style="max-width: 200px; margin: 20px auto;">Back to Dashboard</button>
             </div>
         </div>

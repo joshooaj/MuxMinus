@@ -2,6 +2,9 @@
 const API_URL = 'http://localhost:8000';
 let currentToken = localStorage.getItem('token');
 let currentUser = null;
+let squarePayments = null;
+let squareCard = null;
+let selectedPackage = null;
 
 // Page Navigation
 const pages = {
@@ -356,38 +359,133 @@ window.downloadJob = async function(jobId) {
     }
 };
 
-// Square Payment (Placeholder - will implement with actual Square SDK)
-async function initializeSquarePayment() {
-    // TODO: Initialize Square Web Payments SDK
-    // This will be implemented in the next step with actual Square credentials
-    document.getElementById('square-payment-form').style.display = 'block';
+// Square Payment Integration
+async function initializeSquarePayments() {
+    try {
+        const response = await fetch(`${API_URL}/credits/square-config`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Square not configured');
+        }
+        
+        const config = await response.json();
+        
+        if (!window.Square) {
+            throw new Error('Square.js failed to load');
+        }
+        
+        squarePayments = window.Square.payments(config.application_id, config.location_id);
+        squareCard = await squarePayments.card();
+        await squareCard.attach('#card-container');
+        
+        document.getElementById('card-button').addEventListener('click', handlePayment);
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to initialize Square:', error);
+        showNotification('Payment system not available. Please contact support.', 'error');
+        return false;
+    }
 }
 
-// Credit Purchase
-async function purchaseCredits(amount, price) {
-    // Placeholder for Square payment integration
-    try {
-        const response = await fetch(`${API_URL}/credits/purchase`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${currentToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ amount, payment_method: 'square', transaction_id: 'placeholder' })
-        });
+// Select a credit package
+async function selectCreditPackage(amount, price) {
+    selectedPackage = { amount, price };
+    
+    document.getElementById('selected-package').textContent = 
+        `Purchase ${amount} credits for $${price.toFixed(2)}`;
+    
+    const paymentSection = document.getElementById('payment-section');
+    paymentSection.style.display = 'block';
+    paymentSection.scrollIntoView({ behavior: 'smooth' });
+    
+    if (!squareCard) {
+        await initializeSquarePayments();
+    }
+}
 
-        if (response.ok) {
-            await checkAuth();
-            await loadDashboard();
-            showPage('dashboard');
-            showNotification(`Successfully purchased ${amount} credits!`, 'success');
+// Cancel payment
+function cancelPayment() {
+    selectedPackage = null;
+    document.getElementById('payment-section').style.display = 'none';
+    if (squareCard) {
+        squareCard.destroy();
+        squareCard = null;
+    }
+}
+
+// Handle Square payment
+async function handlePayment(event) {
+    event.preventDefault();
+    
+    if (!selectedPackage) {
+        showNotification('Please select a package', 'error');
+        return;
+    }
+    
+    const cardButton = document.getElementById('card-button');
+    const paymentStatus = document.getElementById('payment-status');
+    
+    try {
+        cardButton.disabled = true;
+        paymentStatus.innerHTML = '<p style=\"color: #667eea;\">Processing payment...</p>';
+        
+        // Tokenize card
+        const result = await squareCard.tokenize();
+        
+        if (result.status === 'OK') {
+            // Send payment to backend
+            const response = await fetch(`${API_URL}/credits/purchase`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${currentToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    amount: selectedPackage.amount,
+                    price: selectedPackage.price,
+                    payment_nonce: result.token
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                showNotification(`Successfully purchased ${selectedPackage.amount} credits!`, 'success');
+                
+                // Update user info
+                await checkAuth();
+                await loadDashboard();
+                
+                // Reset and go back to dashboard
+                cancelPayment();
+                showPage('dashboard');
+            } else {
+                const error = await response.json();
+                paymentStatus.innerHTML = `<p style=\"color: #ef4444;\">${error.detail || 'Payment failed'}</p>`;
+                showNotification(error.detail || 'Payment failed', 'error');
+            }
         } else {
-            const error = await response.json();
-            showNotification(error.detail || 'Purchase failed', 'error');
+            let errorMessage = 'Payment failed';
+            if (result.errors) {
+                errorMessage = result.errors.map(error => error.message).join(', ');
+            }
+            paymentStatus.innerHTML = `<p style=\"color: #ef4444;\">${errorMessage}</p>`;
+            showNotification(errorMessage, 'error');
         }
     } catch (error) {
-        showNotification('Network error. Please try again.', 'error');
+        console.error('Payment error:', error);
+        paymentStatus.innerHTML = '<p style=\"color: #ef4444;\">Payment processing error</p>';
+        showNotification('Payment processing error', 'error');
+    } finally {
+        cardButton.disabled = false;
     }
+}
+
+// Credit Purchase (Legacy - keeping for compatibility)
+async function purchaseCredits(amount, price) {
+    selectCreditPackage(amount, price);
 }
 
 // Notification System

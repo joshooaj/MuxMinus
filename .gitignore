@@ -3,3 +3,4 @@ backend/files/
 **/*.zip
 .playwright-mcp/
 **/node_modules/
+.env

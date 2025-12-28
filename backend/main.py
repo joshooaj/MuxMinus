@@ -23,6 +23,18 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
+try:
+    from square import Square
+    from square.environment import SquareEnvironment
+    from square.core.api_error import ApiError
+    from dotenv import load_dotenv
+    load_dotenv()
+    SQUARE_AVAILABLE = True
+except ImportError:
+    SQUARE_AVAILABLE = False
+    AsyncSquare = None
+    SquareEnvironment = None
+
 from database import get_db, engine, Base
 from models import User, Job, JobStatus, CreditTransaction
 from auth import (
@@ -67,6 +79,27 @@ app.add_middleware(
 
 # Credit cost per job
 CREDIT_COST_PER_JOB = 1.0
+
+# Square API Configuration
+SQUARE_ACCESS_TOKEN = os.getenv("SQUARE_ACCESS_TOKEN", "")
+SQUARE_ENVIRONMENT = os.getenv("SQUARE_ENVIRONMENT", "sandbox")  # 'sandbox' or 'production'
+SQUARE_APPLICATION_ID = os.getenv("SQUARE_APPLICATION_ID", "")
+SQUARE_LOCATION_ID = os.getenv("SQUARE_LOCATION_ID", "")
+
+# Initialize Square client
+square_client = None
+if SQUARE_ACCESS_TOKEN and SQUARE_AVAILABLE and AsyncSquare:
+    # Map environment string to Square Environment enum
+    env = SquareEnvironment.SANDBOX if SQUARE_ENVIRONMENT.lower() == "sandbox" else SquareEnvironment.PRODUCTION
+    square_client = Square(
+        token=SQUARE_ACCESS_TOKEN,
+        environment=env,
+    )
+    logger.info(f"Square client initialized in {SQUARE_ENVIRONMENT} mode")
+elif not SQUARE_AVAILABLE:
+    logger.warning("Square SDK not available. Install 'squareup' package to enable payment processing.")
+else:
+    logger.warning("Square credentials not configured. Payment processing will not be available.")
 
 
 # ============================================================================
@@ -122,7 +155,15 @@ class JobResponse(BaseModel):
 class CreditPurchase(BaseModel):
     """Credit purchase request."""
     amount: float
-    payment_reference: str
+    price: float
+    payment_nonce: str  # Square payment token from frontend
+    
+
+class SquareConfigResponse(BaseModel):
+    """Square configuration for frontend."""
+    application_id: str
+    location_id: str
+    environment: str
 
 
 # ============================================================================
@@ -335,6 +376,19 @@ async def get_profile(current_user: User = Depends(get_current_user)):
 # Credit Management
 # ============================================================================
 
+@app.get("/credits/square-config")
+async def get_square_config():
+    """Get Square configuration for frontend."""
+    if not square_client or not SQUARE_APPLICATION_ID:
+        raise HTTPException(status_code=503, detail="Payment processing not configured")
+    
+    return SquareConfigResponse(
+        application_id=SQUARE_APPLICATION_ID,
+        location_id=SQUARE_LOCATION_ID,
+        environment=SQUARE_ENVIRONMENT
+    )
+
+
 @app.post("/credits/purchase")
 async def purchase_credits(
     purchase: CreditPurchase,
@@ -342,35 +396,65 @@ async def purchase_credits(
     db: Session = Depends(get_db)
 ):
     """
-    Purchase credits (placeholder - integrate with Stripe in Phase 2).
-    
-    For now, just adds credits to the account.
+    Purchase credits with Square payment processing.
     """
+    if not square_client:
+        raise HTTPException(status_code=503, detail="Payment processing not configured")
+    
     if purchase.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
     
-    # Update user credits
-    current_user.credits += purchase.amount
-    db.commit()
+    if purchase.price <= 0:
+        raise HTTPException(status_code=400, detail="Price must be positive")
     
-    # Log transaction
-    transaction = CreditTransaction(
-        user_id=current_user.id,
-        amount=purchase.amount,
-        balance_after=current_user.credits,
-        description=f"Credit purchase",
-        reference=purchase.payment_reference
-    )
-    db.add(transaction)
-    db.commit()
+    try:
+        # Create Square payment
+        idempotency_key = str(uuid.uuid4())
+        
+        # Call Square payments API with new SDK
+        payment = await square_client.payments.create(
+            source_id=purchase.payment_nonce,
+            idempotency_key=idempotency_key,
+            amount_money={
+                "amount": int(purchase.price * 100),  # Convert dollars to cents
+                "currency": "USD"
+            },
+            location_id=SQUARE_LOCATION_ID,
+            note=f"ReStem Credit Purchase - {purchase.amount} credits",
+            buyer_email_address=current_user.email,
+        )
+        
+        # Payment successful - extract payment ID
+        payment_id = payment.id
+        
+        # Update user credits
+        current_user.credits += purchase.amount
+        db.commit()
+        
+        # Log transaction
+        transaction = CreditTransaction(
+            user_id=current_user.id,
+            amount=purchase.amount,
+            balance_after=current_user.credits,
+            description=f"Credit purchase - {purchase.amount} credits for ${purchase.price:.2f}",
+            reference=payment_id
+        )
+        db.add(transaction)
+        db.commit()
+        
+        logger.info(f"User {current_user.id} purchased {purchase.amount} credits for ${purchase.price:.2f}. Payment ID: {payment_id}")
+        
+        return {
+            "message": "Credits purchased successfully",
+            "credits": current_user.credits,
+            "amount_added": purchase.amount,
+            "payment_id": payment_id
+        }
     
-    logger.info(f"User {current_user.id} purchased {purchase.amount} credits")
-    
-    return {
-        "message": "Credits purchased successfully",
-        "credits": current_user.credits,
-        "amount_added": purchase.amount
-    }
+    except Exception as e:
+        logger.error(f"Error processing payment for user {current_user.id}: {str(e)}")
+        # Square SDK throws ApiError with details
+        raise HTTPException(status_code=500, detail=f"Payment processing error: {str(e)}")
 
 
 @app.get("/credits/balance")

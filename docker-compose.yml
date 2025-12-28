@@ -17,6 +17,11 @@ services:
       - USE_CPU=1
       - DATABASE_URL=postgresql://demucs:demucs123@postgres:5432/demucs
       - SECRET_KEY=your-secret-key-change-in-production
+      # Square Payment Configuration (get from Square Developer Dashboard)
+      - SQUARE_ACCESS_TOKEN=${SQUARE_ACCESS_TOKEN:-}
+      - SQUARE_APPLICATION_ID=${SQUARE_APPLICATION_ID:-}
+      - SQUARE_LOCATION_ID=${SQUARE_LOCATION_ID:-}
+      - SQUARE_ENVIRONMENT=${SQUARE_ENVIRONMENT:-sandbox}
     depends_on:
       postgres:
         condition: service_healthy
