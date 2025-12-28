@@ -443,6 +443,9 @@ tbody tr:hover {
     text-align: center;
     transition: all 0.3s;
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
 }
 
 .pricing-card:hover {
@@ -463,6 +466,7 @@ tbody tr:hover {
     font-size: 0.8rem;
     font-weight: 600;
     margin-bottom: 10px;
+    height: 24px;
 }
 
 .pricing-card h3 {
@@ -495,10 +499,12 @@ tbody tr:hover {
     font-size: 0.9rem;
     color: var(--text-light);
     margin-bottom: 20px;
+    flex-grow: 1;
 }
 
 .pricing-card .btn {
     width: 100%;
+    margin-top: auto;
 }
 
 /* Notifications */
