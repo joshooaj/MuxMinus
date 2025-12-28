@@ -411,7 +411,7 @@ async def purchase_credits(
         idempotency_key = str(uuid.uuid4())
         
         # Call Square payments API (synchronous as per quickstart)
-        payment = square_client.payments.create(
+        response = square_client.payments.create(
             source_id=purchase.payment_nonce,
             idempotency_key=idempotency_key,
             amount_money={
@@ -423,8 +423,8 @@ async def purchase_credits(
             buyer_email_address=current_user.email,
         )
         
-        # Payment successful - extract payment ID
-        payment_id = payment.id
+        # Payment successful - extract payment ID from response
+        payment_id = response.payment.id
         
         # Update user credits
         current_user.credits += purchase.amount
