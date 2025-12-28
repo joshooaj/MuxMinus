@@ -1,4 +1,4 @@
-// Demucs Frontend - Main Application
+// ReStem - Main Application
 const API_URL = 'http://localhost:8000';
 let currentToken = localStorage.getItem('token');
 let currentUser = null;
