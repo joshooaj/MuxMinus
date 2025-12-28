@@ -1,26 +1,35 @@
 """
-Demucs Audio Separation API
+Demucs Audio Separation API with User Authentication and Credit System
 
 REST API for uploading audio files, processing them with Demucs,
-and downloading the separated tracks.
+and downloading the separated tracks. Includes user authentication,
+credit management, and job tracking.
 """
 
 import asyncio
 import logging
 import os
 import shutil
-import subprocess
 import uuid
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 import aiofiles
-from fastapi import FastAPI, File, HTTPException, UploadFile, BackgroundTasks
+from fastapi import FastAPI, File, HTTPException, UploadFile, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import Session
+
+from database import get_db, engine, Base
+from models import User, Job, JobStatus, CreditTransaction
+from auth import (
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    get_current_user
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,82 +45,117 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 TEMP_DIR.mkdir(exist_ok=True)
 COMPLETED_DIR.mkdir(exist_ok=True)
 
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Demucs Audio Separation API",
-    description="Upload audio files and separate them into individual tracks (vocals, drums, bass, other)",
-    version="1.0.0"
+    description="Upload audio files and separate them into individual tracks with user authentication and credit system",
+    version="2.0.0"
 )
 
-# Add CORS middleware to allow frontend access
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (restrict in production)
+    allow_origins=["*"],  # Restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-class JobStatus(str, Enum):
-    """Job processing status"""
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+# Credit cost per job
+CREDIT_COST_PER_JOB = 1.0
 
 
-class Job(BaseModel):
-    """Job information"""
-    job_id: str
-    status: JobStatus
+# ============================================================================
+# Pydantic Models (Request/Response)
+# ============================================================================
+
+class UserRegister(BaseModel):
+    """User registration request."""
+    email: EmailStr
+    username: str
+    password: str
+
+
+class UserLogin(BaseModel):
+    """User login request."""
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    """JWT token response."""
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    username: str
+    email: str
+    credits: float
+
+
+class UserProfile(BaseModel):
+    """User profile information."""
+    id: int
+    email: str
+    username: str
+    credits: float
+    created_at: datetime
+
+
+class JobResponse(BaseModel):
+    """Job information response."""
+    id: str
     filename: str
-    created_at: str
-    completed_at: Optional[str] = None
-    error: Optional[str] = None
+    model: str
+    status: str
+    error_message: Optional[str] = None
+    cost: float
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     download_url: Optional[str] = None
 
 
-# In-memory job storage (use Redis/DB in production)
-jobs: Dict[str, Job] = {}
+class CreditPurchase(BaseModel):
+    """Credit purchase request."""
+    amount: float
+    payment_reference: str
 
 
-async def process_audio_file(job_id: str, input_path: Path):
+# ============================================================================
+# Background Processing
+# ============================================================================
+
+async def process_audio_file(job_id: str, input_path: Path, db_session_maker):
     """
     Background task to process audio file with Demucs.
     
     Args:
         job_id: Unique job identifier
         input_path: Path to uploaded audio file
+        db_session_maker: Database session factory
     """
-    job = jobs.get(job_id)
-    if not job:
-        logger.error(f"Job {job_id} not found")
-        return
-    
+    db = db_session_maker()
     try:
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            logger.error(f"Job {job_id} not found in database")
+            return
+        
         # Update status to processing
         job.status = JobStatus.PROCESSING
+        job.started_at = datetime.utcnow()
+        db.commit()
         logger.info(f"Starting demucs processing for job {job_id}")
         
         # Create output directory for this job
         output_dir = TEMP_DIR / job_id
         output_dir.mkdir(exist_ok=True)
         
-        # Run demucs command
-        # Default model is 'htdemucs' (high-quality)
-        # Output format: separated/htdemucs/<song_name>/{drums,bass,other,vocals}.wav
+        # Run demucs command (all 4 stems: drums, bass, other, vocals)
         cmd = [
-            "demucs",
-            "--two-stems=vocals",  # Remove this to get all 4 stems
-            "--out", str(output_dir),
-            "--mp3",  # Output as MP3
-            "--mp3-bitrate", "320",
-            str(input_path)
-        ]
-        
-        # For all 4 stems (drums, bass, other, vocals), use this instead:
-        cmd_all_stems = [
             "demucs",
             "--out", str(output_dir),
             "--mp3",
@@ -119,9 +163,8 @@ async def process_audio_file(job_id: str, input_path: Path):
             str(input_path)
         ]
         
-        # Use all stems command
         process = await asyncio.create_subprocess_exec(
-            *cmd_all_stems,
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -132,12 +175,14 @@ async def process_audio_file(job_id: str, input_path: Path):
             error_msg = stderr.decode() if stderr else "Unknown error"
             logger.error(f"Demucs failed for job {job_id}: {error_msg}")
             job.status = JobStatus.FAILED
-            job.error = error_msg
+            job.error_message = error_msg
+            job.completed_at = datetime.utcnow()
+            db.commit()
             return
         
         logger.info(f"Demucs processing completed for job {job_id}")
         
-        # Find the output directory (demucs creates htdemucs/<filename_without_ext>/)
+        # Find the output directory
         demucs_output = output_dir / "htdemucs"
         if not demucs_output.exists():
             raise FileNotFoundError(f"Demucs output directory not found: {demucs_output}")
@@ -154,12 +199,10 @@ async def process_audio_file(job_id: str, input_path: Path):
         zip_path = COMPLETED_DIR / zip_filename
         
         logger.info(f"Creating ZIP archive for job {job_id}")
-        
-        # Use shutil.make_archive to create ZIP
         shutil.make_archive(
-            str(zip_path.with_suffix('')),  # base name without extension
+            str(zip_path.with_suffix('')),
             'zip',
-            song_dir  # directory to archive
+            song_dir
         )
         
         # Clean up temp files
@@ -168,15 +211,19 @@ async def process_audio_file(job_id: str, input_path: Path):
         
         # Update job status
         job.status = JobStatus.COMPLETED
-        job.completed_at = datetime.utcnow().isoformat()
-        job.download_url = f"/download/{job_id}"
+        job.completed_at = datetime.utcnow()
+        db.commit()
         
         logger.info(f"Job {job_id} completed successfully")
         
     except Exception as e:
         logger.exception(f"Error processing job {job_id}")
-        job.status = JobStatus.FAILED
-        job.error = str(e)
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if job:
+            job.status = JobStatus.FAILED
+            job.error_message = str(e)
+            job.completed_at = datetime.utcnow()
+            db.commit()
         
         # Clean up on error
         try:
@@ -187,37 +234,195 @@ async def process_audio_file(job_id: str, input_path: Path):
                 shutil.rmtree(temp_output)
         except Exception as cleanup_error:
             logger.error(f"Error during cleanup: {cleanup_error}")
+    finally:
+        db.close()
 
 
-@app.get("/")
-async def root():
-    """Health check endpoint"""
+# ============================================================================
+# Authentication Endpoints
+# ============================================================================
+
+@app.post("/auth/register", response_model=TokenResponse)
+async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+    """
+    Register a new user account.
+    
+    New users receive 3 free credits to try the service.
+    """
+    # Check if email already exists
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Check if username already exists
+    existing_username = db.query(User).filter(User.username == user_data.username).first()
+    if existing_username:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
+    # Create new user with 3 free credits
+    hashed_password = get_password_hash(user_data.password)
+    new_user = User(
+        email=user_data.email,
+        username=user_data.username,
+        hashed_password=hashed_password,
+        credits=3.0  # Free trial credits
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Log the free credits
+    transaction = CreditTransaction(
+        user_id=new_user.id,
+        amount=3.0,
+        balance_after=3.0,
+        description="Welcome bonus - 3 free credits",
+        reference="registration"
+    )
+    db.add(transaction)
+    db.commit()
+    
+    logger.info(f"New user registered: {user_data.email}")
+    
+    # Create access token (JWT spec requires 'sub' to be a string)
+    access_token = create_access_token(data={"sub": str(new_user.id)})
+    
+    return TokenResponse(
+        access_token=access_token,
+        user_id=new_user.id,
+        username=new_user.username,
+        email=new_user.email,
+        credits=new_user.credits
+    )
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+    """Login with email and password."""
+    user = db.query(User).filter(User.email == user_data.email).first()
+    if not user or not verify_password(user_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password"
+        )
+    
+    # Create access token (JWT spec requires 'sub' to be a string)
+    access_token = create_access_token(data={"sub": str(user.id)})
+    
+    return TokenResponse(
+        access_token=access_token,
+        user_id=user.id,
+        username=user.username,
+        email=user.email,
+        credits=user.credits
+    )
+
+
+@app.get("/auth/me", response_model=UserProfile)
+async def get_profile(current_user: User = Depends(get_current_user)):
+    """Get current user profile."""
+    return UserProfile(
+        id=current_user.id,
+        email=current_user.email,
+        username=current_user.username,
+        credits=current_user.credits,
+        created_at=current_user.created_at
+    )
+
+
+# ============================================================================
+# Credit Management
+# ============================================================================
+
+@app.post("/credits/purchase")
+async def purchase_credits(
+    purchase: CreditPurchase,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Purchase credits (placeholder - integrate with Stripe in Phase 2).
+    
+    For now, just adds credits to the account.
+    """
+    if purchase.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    
+    # Update user credits
+    current_user.credits += purchase.amount
+    db.commit()
+    
+    # Log transaction
+    transaction = CreditTransaction(
+        user_id=current_user.id,
+        amount=purchase.amount,
+        balance_after=current_user.credits,
+        description=f"Credit purchase",
+        reference=purchase.payment_reference
+    )
+    db.add(transaction)
+    db.commit()
+    
+    logger.info(f"User {current_user.id} purchased {purchase.amount} credits")
+    
     return {
-        "service": "Demucs Audio Separation API",
-        "status": "running",
-        "version": "1.0.0"
+        "message": "Credits purchased successfully",
+        "credits": current_user.credits,
+        "amount_added": purchase.amount
     }
 
 
-@app.post("/upload", response_model=Job)
+@app.get("/credits/balance")
+async def get_credit_balance(current_user: User = Depends(get_current_user)):
+    """Get current credit balance."""
+    return {
+        "credits": current_user.credits,
+        "user_id": current_user.id
+    }
+
+
+@app.get("/credits/history")
+async def get_credit_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get credit transaction history."""
+    transactions = db.query(CreditTransaction)\
+        .filter(CreditTransaction.user_id == current_user.id)\
+        .order_by(CreditTransaction.created_at.desc())\
+        .limit(50)\
+        .all()
+    
+    return {"transactions": transactions}
+
+
+# ============================================================================
+# Job Management (Audio Processing)
+# ============================================================================
+
+@app.post("/upload", response_model=JobResponse)
 async def upload_audio(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Upload an audio file for processing.
     
-    Args:
-        file: Audio file (MP3, WAV, FLAC, etc.)
-        
-    Returns:
-        Job information with job_id for tracking
+    Requires authentication. Costs 1 credit per job.
     """
+    # Check if user has enough credits
+    if current_user.credits < CREDIT_COST_PER_JOB:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient credits. You need {CREDIT_COST_PER_JOB} credit(s). Current balance: {current_user.credits}"
+        )
+    
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
     
-    # Check file extension
     allowed_extensions = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in allowed_extensions:
@@ -243,60 +448,90 @@ async def upload_audio(
         logger.exception("Error saving uploaded file")
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
     
-    # Create job
-    job = Job(
-        job_id=job_id,
-        status=JobStatus.PENDING,
-        filename=file.filename,
-        created_at=datetime.utcnow().isoformat()
+    # Deduct credits
+    current_user.credits -= CREDIT_COST_PER_JOB
+    db.commit()
+    
+    # Log credit usage
+    transaction = CreditTransaction(
+        user_id=current_user.id,
+        amount=-CREDIT_COST_PER_JOB,
+        balance_after=current_user.credits,
+        description=f"Audio separation job",
+        reference=job_id
     )
-    jobs[job_id] = job
+    db.add(transaction)
+    
+    # Create job in database
+    job = Job(
+        id=job_id,
+        user_id=current_user.id,
+        filename=file.filename,
+        model="htdemucs",
+        status=JobStatus.PENDING,
+        cost=CREDIT_COST_PER_JOB
+    )
+    db.add(job)
+    db.commit()
     
     # Start background processing
-    background_tasks.add_task(process_audio_file, job_id, upload_path)
+    from database import SessionLocal
+    background_tasks.add_task(process_audio_file, job_id, upload_path, SessionLocal)
     
-    logger.info(f"Job {job_id} created and queued for processing")
+    logger.info(f"Job {job_id} created for user {current_user.id}")
     
-    return job
+    return JobResponse(
+        id=job.id,
+        filename=job.filename,
+        model=job.model,
+        status=job.status.value,
+        cost=job.cost,
+        created_at=job.created_at
+    )
 
 
-@app.get("/status/{job_id}", response_model=Job)
-async def get_job_status(job_id: str):
-    """
-    Get the status of a processing job.
-    
-    Args:
-        job_id: Job identifier
-        
-    Returns:
-        Job information including status and download URL if completed
-    """
-    job = jobs.get(job_id)
+@app.get("/status/{job_id}", response_model=JobResponse)
+async def get_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get the status of a processing job."""
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    return job
+    download_url = f"/download/{job_id}" if job.status == JobStatus.COMPLETED else None
+    
+    return JobResponse(
+        id=job.id,
+        filename=job.filename,
+        model=job.model,
+        status=job.status.value,
+        error_message=job.error_message,
+        cost=job.cost,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        download_url=download_url
+    )
 
 
 @app.get("/download/{job_id}")
-async def download_result(job_id: str):
-    """
-    Download the processed audio tracks as a ZIP file.
-    
-    Args:
-        job_id: Job identifier
-        
-    Returns:
-        ZIP file containing separated audio tracks
-    """
-    job = jobs.get(job_id)
+async def download_result(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Download the processed audio tracks as a ZIP file."""
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
     if job.status != JobStatus.COMPLETED:
         raise HTTPException(
             status_code=400,
-            detail=f"Job is not completed yet. Current status: {job.status}"
+            detail=f"Job is not completed yet. Current status: {job.status.value}"
         )
     
     zip_path = COMPLETED_DIR / f"{job_id}.zip"
@@ -311,17 +546,13 @@ async def download_result(job_id: str):
 
 
 @app.delete("/job/{job_id}")
-async def delete_job(job_id: str):
-    """
-    Delete a job and its associated files.
-    
-    Args:
-        job_id: Job identifier
-        
-    Returns:
-        Success message
-    """
-    job = jobs.get(job_id)
+async def delete_job(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a job and its associated files."""
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
@@ -330,23 +561,59 @@ async def delete_job(job_id: str):
     if zip_path.exists():
         zip_path.unlink()
     
-    # Remove from jobs dict
-    del jobs[job_id]
+    # Delete from database
+    db.delete(job)
+    db.commit()
     
-    logger.info(f"Job {job_id} deleted")
+    logger.info(f"Job {job_id} deleted by user {current_user.id}")
     
     return {"message": "Job deleted successfully"}
 
 
 @app.get("/jobs")
-async def list_jobs():
-    """
-    List all jobs.
+async def list_jobs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all jobs for the current user."""
+    jobs = db.query(Job)\
+        .filter(Job.user_id == current_user.id)\
+        .order_by(Job.created_at.desc())\
+        .limit(50)\
+        .all()
     
-    Returns:
-        List of all jobs
-    """
-    return {"jobs": list(jobs.values())}
+    return {
+        "jobs": [
+            JobResponse(
+                id=job.id,
+                filename=job.filename,
+                model=job.model,
+                status=job.status.value,
+                error_message=job.error_message,
+                cost=job.cost,
+                created_at=job.created_at,
+                started_at=job.started_at,
+                completed_at=job.completed_at,
+                download_url=f"/download/{job.id}" if job.status == JobStatus.COMPLETED else None
+            )
+            for job in jobs
+        ]
+    }
+
+
+# ============================================================================
+# General Endpoints
+# ============================================================================
+
+@app.get("/")
+async def root():
+    """Health check endpoint."""
+    return {
+        "service": "Demucs Audio Separation API",
+        "status": "running",
+        "version": "2.0.0",
+        "features": ["authentication", "credit_system", "job_tracking"]
+    }
 
 
 if __name__ == "__main__":

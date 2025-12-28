@@ -14,6 +14,11 @@ services:
       - PIP_CACHE_DIR=/app/pip-cache
       # Uncomment to use CPU-only mode (smaller download, no GPU required):
       # - USE_CPU=1
+      - DATABASE_URL=postgresql://demucs:demucs123@postgres:5432/demucs
+      - SECRET_KEY=your-secret-key-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
     deploy:
       resources:
         reservations:
@@ -29,6 +34,22 @@ services:
       retries: 3
       start_period: 40s
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: demucs-postgres
+    environment:
+      - POSTGRES_USER=demucs
+      - POSTGRES_PASSWORD=demucs123
+      - POSTGRES_DB=demucs
+    volumes:
+      - demucs-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demucs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   demucs-completed:
     driver: local
@@ -37,4 +58,6 @@ volumes:
   demucs-pip-cache:
     driver: local
   demucs-packages:
+    driver: local
+  demucs-postgres-data:
     driver: local

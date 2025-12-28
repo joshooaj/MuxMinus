@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY requirements.txt entrypoint.sh ./
-COPY main.py .
+COPY main.py database.py models.py auth.py ./
 
 # Install only system dependencies and minimal Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
