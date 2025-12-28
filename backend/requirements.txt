@@ -1,7 +1,17 @@
+# Demucs API Requirements
+# Installed at container startup and cached to volume for fast subsequent starts
+
+# PyTorch CPU-only (much smaller than GPU version)
+# Change to torch==2.5.1 and torchaudio==2.5.1 for GPU support
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+torchaudio==2.5.1+cpu
+
+# Demucs audio separation
 demucs==4.0.1
-torchcodec==0.9.1
+
+# FastAPI web framework
 fastapi==0.115.5
 uvicorn[standard]==0.34.0
 python-multipart==0.0.20
 aiofiles==24.1.0
-requests==2.32.3

@@ -7,8 +7,11 @@ services:
     volumes:
       - demucs-completed:/app/completed
       - demucs-uploads:/app/uploads
+      - demucs-pip-cache:/app/pip-cache
+      - demucs-packages:/app/.packages_installed
     environment:
       - PYTHONUNBUFFERED=1
+      - PIP_CACHE_DIR=/app/pip-cache
     deploy:
       resources:
         reservations:
@@ -28,4 +31,8 @@ volumes:
   demucs-completed:
     driver: local
   demucs-uploads:
+    driver: local
+  demucs-pip-cache:
+    driver: local
+  demucs-packages:
     driver: local

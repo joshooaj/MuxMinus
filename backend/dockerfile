@@ -2,15 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY . .
+COPY requirements.txt entrypoint.sh ./
+COPY main.py .
 
-RUN apt-get update && apt-get install -y ffmpeg \
+# Install only system dependencies and minimal Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r requirements.txt \
-    && mkdir -p ./completed ./uploads ./temp
+    && mkdir -p ./completed ./uploads ./temp ./pip-cache \
+    && chmod +x /app/entrypoint.sh \
+    && pip install --no-cache-dir pip setuptools wheel
 
-
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
+ENTRYPOINT ["/app/entrypoint.sh"]
 EXPOSE 80
