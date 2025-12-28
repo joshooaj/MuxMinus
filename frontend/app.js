@@ -212,7 +212,7 @@ async function loadJobList() {
                     <td><span class="status-badge ${statusClass}">${job.status}</span></td>
                     <td>${new Date(job.created_at).toLocaleString()}</td>
                     <td>
-                        ${job.status === 'COMPLETED' ? 
+                        ${job.status.toUpperCase() === 'COMPLETED' ? 
                             `<button onclick="downloadJob('${job.id}')" class="btn-download">Download</button>` : 
                             `<button onclick="checkJobStatus('${job.id}')" class="btn-refresh">Refresh</button>`
                         }
@@ -224,6 +224,42 @@ async function loadJobList() {
     } catch (error) {
         console.error('Failed to load job list:', error);
     }
+}
+
+// Drag and Drop for Upload Area
+const uploadArea = document.querySelector('.upload-area');
+if (uploadArea) {
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        uploadArea.classList.add('dragging');
+    });
+
+    uploadArea.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        uploadArea.classList.remove('dragging');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        uploadArea.classList.remove('dragging');
+        
+        const fileInput = document.getElementById('audio-file');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            // Show file name
+            const fileName = e.dataTransfer.files[0].name;
+            const fileInfo = document.createElement('p');
+            fileInfo.style.marginTop = '10px';
+            fileInfo.style.color = '#4f46e5';
+            fileInfo.innerHTML = `<strong>Selected:</strong> ${fileName}`;
+            const existingInfo = uploadArea.querySelector('p[style*="color: rgb"]');
+            if (existingInfo) existingInfo.remove();
+            uploadArea.appendChild(fileInfo);
+        }
+    });
 }
 
 // Upload Audio
@@ -277,8 +313,8 @@ document.getElementById('upload-form').addEventListener('submit', async (e) => {
     }
 });
 
-// Check Job Status
-async function checkJobStatus(jobId) {
+// Check Job Status (Global function for onclick)
+window.checkJobStatus = async function(jobId) {
     try {
         const response = await fetch(`${API_URL}/status/${jobId}`, {
             headers: { 'Authorization': `Bearer ${currentToken}` }
@@ -291,10 +327,10 @@ async function checkJobStatus(jobId) {
     } catch (error) {
         console.error('Failed to check job status:', error);
     }
-}
+};
 
-// Download Job
-async function downloadJob(jobId) {
+// Download Job (Global function for onclick)
+window.downloadJob = async function(jobId) {
     try {
         const response = await fetch(`${API_URL}/download/${jobId}`, {
             headers: { 'Authorization': `Bearer ${currentToken}` }
@@ -318,7 +354,7 @@ async function downloadJob(jobId) {
         console.error('Download failed:', error);
         showNotification('Download failed', 'error');
     }
-}
+};
 
 // Square Payment (Placeholder - will implement with actual Square SDK)
 async function initializeSquarePayment() {

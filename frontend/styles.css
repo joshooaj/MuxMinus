@@ -360,6 +360,12 @@ tbody tr:hover {
     background: var(--bg);
 }
 
+.upload-area.dragging {
+    border-color: var(--secondary);
+    background: #f0f4ff;
+    transform: scale(1.02);
+}
+
 .upload-area svg {
     width: 64px;
     height: 64px;
