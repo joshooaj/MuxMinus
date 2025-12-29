@@ -24,6 +24,8 @@ body {
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     min-height: 100vh;
     color: var(--text);
+    display: flex;
+    flex-direction: column;
 }
 
 /* Layout */
@@ -32,6 +34,7 @@ body {
     padding: 20px;
     max-width: 1200px;
     margin: 0 auto;
+    flex: 1;
 }
 
 /* Auth Pages */
@@ -39,8 +42,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
     padding: 20px;
+    flex: 1;
 }
 
 .auth-card {
