@@ -4,6 +4,7 @@ const API_URL = '';
 let currentToken = localStorage.getItem('token');
 let currentUser = null;
 let squarePayments = null;
+let jobPollingInterval = null; // For automatic job status updates
 let squareCard = null;
 let selectedPackage = null;
 
@@ -20,8 +21,42 @@ function showPage(pageName) {
     Object.values(pages).forEach(page => page.style.display = 'none');
     if (pages[pageName]) {
         pages[pageName].style.display = 'block';
+        
+        // Update URL without reloading the page
+        const path = pageName === 'login' || pageName === 'register' ? '/' : `/${pageName}`;
+        if (window.location.pathname !== path) {
+            window.history.pushState({ page: pageName }, '', path);
+        }
+    }
+    
+    // Stop polling when leaving dashboard
+    if (pageName !== 'dashboard') {
+        stopJobPolling();
     }
 }
+
+// Handle browser back/forward buttons
+window.addEventListener('popstate', (event) => {
+    if (event.state && event.state.page) {
+        // Show the page without updating history (to avoid duplicate entries)
+        Object.values(pages).forEach(page => page.style.display = 'none');
+        if (pages[event.state.page]) {
+            pages[event.state.page].style.display = 'block';
+        }
+        
+        // Stop polling if not on dashboard
+        if (event.state.page !== 'dashboard') {
+            stopJobPolling();
+        }
+    } else {
+        // Handle root path - check if user is logged in
+        if (currentToken) {
+            showPage('dashboard');
+        } else {
+            showPage('login');
+        }
+    }
+});
 
 // Authentication Check
 async function checkAuth() {
@@ -203,26 +238,61 @@ async function loadJobList() {
 
             if (jobs.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">No jobs yet</td></tr>';
+                stopJobPolling();
                 return;
+            }
+
+            // Check if any jobs are processing
+            const hasProcessingJobs = jobs.some(job => 
+                job.status.toUpperCase() === 'PENDING' || job.status.toUpperCase() === 'PROCESSING'
+            );
+
+            // Start or stop polling based on job status
+            if (hasProcessingJobs) {
+                startJobPolling();
+            } else {
+                stopJobPolling();
             }
 
             jobs.forEach(job => {
                 const row = document.createElement('tr');
                 const statusClass = `status-${job.status.toLowerCase()}`;
                 
+                // Add visual indicator for processing jobs
+                let statusBadge = `<span class="status-badge ${statusClass}">${job.status}</span>`;
+                if (job.status.toUpperCase() === 'PROCESSING') {
+                    statusBadge += ' <span style="animation: pulse 1.5s infinite;">⏳</span>';
+                }
+                
                 row.innerHTML = `
                     <td>${job.filename}</td>
                     <td>${job.model}</td>
-                    <td><span class="status-badge ${statusClass}">${job.status}</span></td>
+                    <td>${statusBadge}</td>
                     <td>${new Date(job.created_at).toLocaleString()}</td>
                     <td>
                         ${job.status.toUpperCase() === 'COMPLETED' ? 
-                            `<button onclick="downloadJob('${job.id}')" class="btn-download">Download</button>` : 
+                            `<button onclick="showJobDetails('${job.id}')" class="btn-download">View/Play</button>
+                             <button onclick="downloadJob('${job.id}')" class="btn-download">Download</button>` : 
                             `<button onclick="checkJobStatus('${job.id}')" class="btn-refresh">Refresh</button>`
                         }
                     </td>
                 `;
                 tbody.appendChild(row);
+                
+                // Add expandable row for stems (hidden by default)
+                if (job.status.toUpperCase() === 'COMPLETED') {
+                    const detailsRow = document.createElement('tr');
+                    detailsRow.id = `job-details-${job.id}`;
+                    detailsRow.style.display = 'none';
+                    detailsRow.innerHTML = `
+                        <td colspan="5" style="padding: 20px; background: #f9fafb;">
+                            <div id="stems-${job.id}" style="display: flex; flex-direction: column; gap: 15px;">
+                                <p style="color: #667eea; font-weight: 600;">Loading stems...</p>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(detailsRow);
+                }
             });
         }
     } catch (error) {
@@ -266,11 +336,23 @@ if (uploadArea) {
     });
 }
 
+// Stem count selector event listener
+document.getElementById('stem-count').addEventListener('change', (e) => {
+    const twoStemOption = document.getElementById('two-stem-option');
+    if (e.target.value === '2') {
+        twoStemOption.style.display = 'block';
+    } else {
+        twoStemOption.style.display = 'none';
+    }
+});
+
 // Upload Audio
 document.getElementById('upload-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fileInput = document.getElementById('audio-file');
     const model = document.getElementById('model-select').value;
+    const stemCount = document.getElementById('stem-count').value;
+    const twoStemType = document.getElementById('two-stem-type').value;
     const errorDiv = document.getElementById('upload-error');
     const progressDiv = document.getElementById('upload-progress');
 
@@ -283,6 +365,10 @@ document.getElementById('upload-form').addEventListener('submit', async (e) => {
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
     formData.append('model', model);
+    formData.append('stem_count', stemCount);
+    if (stemCount === '2') {
+        formData.append('two_stem_type', twoStemType);
+    }
 
     try {
         progressDiv.style.display = 'block';
@@ -333,6 +419,32 @@ window.checkJobStatus = async function(jobId) {
     }
 };
 
+// Start automatic job status polling
+function startJobPolling() {
+    // Don't start if already polling
+    if (jobPollingInterval) {
+        return;
+    }
+    
+    console.log('Starting job status polling...');
+    jobPollingInterval = setInterval(async () => {
+        // Only poll if we're on the dashboard page
+        const dashboardPage = document.getElementById('dashboard-page');
+        if (dashboardPage && dashboardPage.style.display !== 'none') {
+            await loadJobList();
+        }
+    }, 5000); // Poll every 5 seconds
+}
+
+// Stop automatic job status polling
+function stopJobPolling() {
+    if (jobPollingInterval) {
+        console.log('Stopping job status polling...');
+        clearInterval(jobPollingInterval);
+        jobPollingInterval = null;
+    }
+}
+
 // Download Job (Global function for onclick)
 window.downloadJob = async function(jobId) {
     try {
@@ -357,6 +469,86 @@ window.downloadJob = async function(jobId) {
     } catch (error) {
         console.error('Download failed:', error);
         showNotification('Download failed', 'error');
+    }
+};
+
+// Show job details and stems (Global function for onclick)
+window.showJobDetails = async function(jobId) {
+    const detailsRow = document.getElementById(`job-details-${jobId}`);
+    const stemsDiv = document.getElementById(`stems-${jobId}`);
+    
+    // Toggle visibility
+    if (detailsRow.style.display === 'none') {
+        detailsRow.style.display = 'table-row';
+        
+        // Load stems if not already loaded
+        if (stemsDiv.innerHTML.includes('Loading stems')) {
+            try {
+                const response = await fetch(`${API_URL}/stems/${jobId}`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const stems = data.stems || [];
+                    
+                    if (stems.length === 0) {
+                        stemsDiv.innerHTML = '<p style="color: #ef4444;">No stems found</p>';
+                        return;
+                    }
+                    
+                    // Create audio players for each stem
+                    stemsDiv.innerHTML = stems.map(stem => `
+                        <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                <h4 style="margin: 0; color: #667eea; text-transform: capitalize;">${stem.name}</h4>
+                                <button onclick="downloadSingleStem('${jobId}', '${stem.name}')" class="btn-download" style="padding: 6px 12px; font-size: 0.9rem;">
+                                    Download
+                                </button>
+                            </div>
+                            <audio controls style="width: 100%;" preload="none">
+                                <source src="${API_URL}${stem.url}" type="audio/mpeg">
+                                Your browser does not support the audio element.
+                            </audio>
+                        </div>
+                    `).join('');
+                } else {
+                    stemsDiv.innerHTML = '<p style="color: #ef4444;">Failed to load stems</p>';
+                }
+            } catch (error) {
+                console.error('Failed to load stems:', error);
+                stemsDiv.innerHTML = '<p style="color: #ef4444;">Error loading stems</p>';
+            }
+        }
+    } else {
+        detailsRow.style.display = 'none';
+    }
+};
+
+// Download single stem (Global function for onclick)
+window.downloadSingleStem = async function(jobId, stemName) {
+    try {
+        const response = await fetch(`${API_URL}/stems/${jobId}/${stemName}`, {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${stemName}.mp3`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showNotification('Download started', 'success');
+        } else {
+            showNotification('Download failed', 'error');
+        }
+    } catch (error) {
+        console.error('Download error:', error);
+        showNotification('Download error', 'error');
     }
 };
 
@@ -535,10 +727,29 @@ document.getElementById('show-login').addEventListener('click', (e) => {
 // Initialize App
 (async function init() {
     const isAuthenticated = await checkAuth();
+    
+    // Check URL path to determine which page to show
+    const path = window.location.pathname;
+    let targetPage = 'dashboard';
+    
+    if (path === '/upload') {
+        targetPage = 'upload';
+    } else if (path === '/purchase' || path === '/credits') {
+        targetPage = 'purchase';
+    } else if (path === '/dashboard') {
+        targetPage = 'dashboard';
+    } else if (path === '/register') {
+        targetPage = 'register';
+    } else if (path === '/' || path === '/login') {
+        targetPage = isAuthenticated ? 'dashboard' : 'login';
+    }
+    
     if (isAuthenticated) {
-        showPage('dashboard');
-        await loadDashboard();
+        showPage(targetPage);
+        if (targetPage === 'dashboard' || targetPage === 'upload' || targetPage === 'purchase') {
+            await loadDashboard();
+        }
     } else {
-        showPage('login');
+        showPage(targetPage === 'register' ? 'register' : 'login');
     }
 })();

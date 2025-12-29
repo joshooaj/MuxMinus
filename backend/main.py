@@ -200,14 +200,26 @@ async def process_audio_file(job_id: str, input_path: Path, db_session_maker):
         output_dir = TEMP_DIR / job_id
         output_dir.mkdir(exist_ok=True)
         
-        # Run demucs command (all 4 stems: drums, bass, other, vocals)
+        # Build demucs command based on stem count
         cmd = [
             "demucs",
             "--out", str(output_dir),
             "--mp3",
-            "--mp3-bitrate", "320",
-            str(input_path)
+            "--mp3-bitrate", "320"
         ]
+        
+        # Add two-stem mode if requested
+        if job.stem_count == 2 and job.two_stem_type:
+            cmd.extend(["--two-stems", job.two_stem_type])
+            logger.info(f"Using 2-stem mode: {job.two_stem_type}")
+        
+        # Add model if specified
+        if job.model and job.model != "htdemucs":
+            cmd.extend(["-n", job.model])
+        
+        cmd.append(str(input_path))
+        
+        logger.info(f"Running command: {' '.join(cmd)}")
         
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -497,6 +509,9 @@ async def get_credit_history(
 async def upload_audio(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    model: str = "htdemucs",
+    stem_count: int = 4,
+    two_stem_type: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -504,6 +519,12 @@ async def upload_audio(
     Upload an audio file for processing.
     
     Requires authentication. Costs 1 credit per job.
+    
+    Args:
+        file: Audio file to process
+        model: Demucs model to use (htdemucs, htdemucs_ft, htdemucs_6s)
+        stem_count: Number of stems (2 or 4)
+        two_stem_type: For 2-stem mode, which stem to isolate (vocals, drums, bass)
     """
     # Check if user has enough credits
     if current_user.credits < CREDIT_COST_PER_JOB:
@@ -560,7 +581,9 @@ async def upload_audio(
         id=job_id,
         user_id=current_user.id,
         filename=file.filename,
-        model="htdemucs",
+        model=model,
+        stem_count=stem_count,
+        two_stem_type=two_stem_type if stem_count == 2 else None,
         status=JobStatus.PENDING,
         cost=CREDIT_COST_PER_JOB
     )
@@ -635,6 +658,98 @@ async def download_result(
         path=zip_path,
         filename=f"{Path(job.filename).stem}_separated.zip",
         media_type="application/zip"
+    )
+
+
+@app.get("/stems/{job_id}")
+async def get_stems_list(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get list of available stems for a completed job."""
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job is not completed yet. Current status: {job.status.value}"
+        )
+    
+    zip_path = COMPLETED_DIR / f"{job_id}.zip"
+    if not zip_path.exists():
+        raise HTTPException(status_code=404, detail="Result file not found")
+    
+    # Extract stem names from the zip file
+    import zipfile
+    stems = []
+    with zipfile.ZipFile(zip_path, 'r') as zip_file:
+        for filename in zip_file.namelist():
+            if filename.endswith('.mp3'):
+                stem_name = Path(filename).stem
+                stems.append({
+                    "name": stem_name,
+                    "filename": filename,
+                    "url": f"/stems/{job_id}/{stem_name}"
+                })
+    
+    return {"job_id": job_id, "stems": stems}
+
+
+@app.get("/stems/{job_id}/{stem_name}")
+async def stream_stem(
+    job_id: str,
+    stem_name: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Stream an individual stem audio file."""
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job is not completed yet. Current status: {job.status.value}"
+        )
+    
+    zip_path = COMPLETED_DIR / f"{job_id}.zip"
+    if not zip_path.exists():
+        raise HTTPException(status_code=404, detail="Result file not found")
+    
+    # Extract the specific stem from the zip file to a temp location
+    import zipfile
+    import tempfile
+    
+    with zipfile.ZipFile(zip_path, 'r') as zip_file:
+        # Find the file matching the stem name
+        matching_file = None
+        for filename in zip_file.namelist():
+            if Path(filename).stem == stem_name and filename.endswith('.mp3'):
+                matching_file = filename
+                break
+        
+        if not matching_file:
+            raise HTTPException(status_code=404, detail=f"Stem '{stem_name}' not found")
+        
+        # Extract to temp file
+        temp_dir = Path(tempfile.gettempdir()) / "restem_stems"
+        temp_dir.mkdir(exist_ok=True)
+        temp_file = temp_dir / f"{job_id}_{stem_name}.mp3"
+        
+        # Only extract if not already cached
+        if not temp_file.exists():
+            with zip_file.open(matching_file) as source:
+                with open(temp_file, 'wb') as target:
+                    shutil.copyfileobj(source, target)
+    
+    return FileResponse(
+        path=temp_file,
+        filename=f"{stem_name}.mp3",
+        media_type="audio/mpeg"
     )
 
 

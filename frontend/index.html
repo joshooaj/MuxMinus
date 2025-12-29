@@ -155,11 +155,28 @@
                     </div>
                     
                     <div class="form-group">
+                        <label for="stem-count">Number of Stems</label>
+                        <select id="stem-count" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 1rem;">
+                            <option value="4">4 Stems (Vocals, Drums, Bass, Other)</option>
+                            <option value="2">2 Stems (Karaoke Mode - Faster)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="two-stem-option" style="display: none;">
+                        <label for="two-stem-type">Isolate Which Stem?</label>
+                        <select id="two-stem-type" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 1rem;">
+                            <option value="vocals">Vocals (Remove Instruments)</option>
+                            <option value="drums">Drums (Remove Everything Else)</option>
+                            <option value="bass">Bass (Remove Everything Else)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
                         <label for="model-select">Separation Model</label>
                         <select id="model-select" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 1rem;">
-                            <option value="htdemucs">HTDemucs (Best Quality - 4 stems)</option>
+                            <option value="htdemucs">HTDemucs (Best Quality)</option>
                             <option value="htdemucs_ft">HTDemucs Fine-Tuned (Faster)</option>
-                            <option value="htdemucs_6s">HTDemucs 6-stem (6 stems)</option>
+                            <option value="htdemucs_6s">HTDemucs 6-stem</option>
                         </select>
                     </div>
                     
@@ -213,20 +230,21 @@
                 </div>
             </div>
 
-            <div class="dashboard-card" id="payment-section" style="display: none;">
-                <h3>💳 Complete Your Purchase</h3>
-                <p id="selected-package" style="font-size: 1.2rem; margin-bottom: 20px;"></p>
+            <div class="dashboard-card" id="payment-section" style="display: none; margin-top: 30px;">
+                <h3 style="text-align: center;">💳 Complete Your Purchase</h3>
+                <p id="selected-package" style="font-size: 1.2rem; margin-bottom: 20px; text-align: center;"></p>
                 
                 <div id="square-payment-form">
                     <div id="card-container" style="max-width: 500px; margin: 0 auto;"></div>
-                    <div id="payment-status" style="margin-top: 20px;"></div>
-                    <button id="card-button" class="btn" style="max-width: 500px; margin: 20px auto;">Pay Now</button>
+                    <div id="payment-status" style="margin-top: 20px; text-align: center;"></div>
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 20px;">
+                        <button id="card-button" class="btn" style="max-width: 500px; width: 100%;">Pay Now</button>
+                        <button class="btn btn-secondary" onclick="cancelPayment()" style="max-width: 500px; width: 100%;">Cancel</button>
+                    </div>
                 </div>
-                
-                <button class="btn btn-secondary" onclick="cancelPayment()" style="max-width: 500px; margin: 10px auto;">Cancel</button>
             </div>
 
-            <div class="dashboard-card" style="text-align: center;">
+            <div class="dashboard-card" style="text-align: center; margin-top: 30px;">
                 <h3>🔒 Secure Payment with Square</h3>
                 <p style="color: #6b7280; margin-bottom: 20px;">All transactions are encrypted and secure. We never store your payment information.</p>
                 <button class="btn btn-secondary" onclick="showPage('dashboard')" style="max-width: 200px; margin: 20px auto;">Back to Dashboard</button>

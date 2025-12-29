@@ -55,6 +55,8 @@ class Job(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     filename = Column(String, nullable=False)
     model = Column(String, default="htdemucs", nullable=False)
+    stem_count = Column(Integer, default=4, nullable=False)  # 2 or 4 stems
+    two_stem_type = Column(String, nullable=True)  # vocals, drums, bass (only for 2-stem mode)
     status = Column(Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
     error_message = Column(Text, nullable=True)
     cost = Column(Float, default=1.0, nullable=False)  # Credits deducted
