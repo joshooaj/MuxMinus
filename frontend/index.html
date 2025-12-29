@@ -148,7 +148,7 @@
     <div id="login-page" class="page" style="display: none;">
         <div class="auth-container">
             <div class="auth-card">
-                <h1><span class="logo">🎚️</span> Mux Minus</h1>
+                <h1 class="clickable-logo" onclick="goHome()"><span class="logo">🎚️</span> Mux Minus</h1>
                 <p class="subtitle">Separate audio tracks with AI</p>
                 
                 <form id="login-form">
@@ -178,7 +178,7 @@
     <div id="register-page" class="page">
         <div class="auth-container">
             <div class="auth-card">
-                <h1><span class="logo">🎚️</span> Mux Minus</h1>
+                <h1 class="clickable-logo" onclick="goHome()"><span class="logo">🎚️</span> Mux Minus</h1>
                 <p class="subtitle">Get 3 free credits to start!</p>
                 
                 <form id="register-form">
@@ -217,6 +217,7 @@
     <!-- Dashboard Page -->
     <div id="dashboard-page" class="page">
         <div class="dashboard-header">
+            <h1 class="clickable-logo" onclick="goHome()"><span class="logo">🎚️</span> Mux Minus</h1>
             <div class="user-info">
                 <h2>Welcome, <span id="user-name">User</span>!</h2>
                 <p id="user-email">user@example.com</p>
@@ -307,14 +308,22 @@
 
     <!-- Purchase Page -->
     <div id="purchase-page" class="page">
-        <div class="purchase-container">
-            <div class="purchase-header">
-                <h2>💳 Purchase Credits</h2>
-                <p class="current-balance">Your current balance: <strong><span id="credit-balance">0</span> credits</strong></p>
-                <p class="subtitle">1 credit = 1 audio separation</p>
+        <div class="dashboard-header">
+            <h1 class="clickable-logo" onclick="goHome()"><span class="logo">🎚️</span> Mux Minus</h1>
+            <div class="user-info">
+                <h2>Welcome, <span id="user-name-purchase">User</span>!</h2>
+                <p id="user-email-purchase">user@example.com</p>
             </div>
+            <div class="credit-display" onclick="showTransactionHistory()" style="cursor: pointer;" title="Click to view transaction history">
+                <div class="credit-amount"><span id="header-credits-purchase">0</span></div>
+                <div class="credit-label">Credits Available</div>
+            </div>
+        </div>
 
-            <div class="pricing-grid">
+        <h2 style="text-align: center; margin: 30px 0 20px 0;">💳 Purchase Credits</h2>
+        <p style="text-align: center; color: #6b7280; margin-bottom: 30px;">1 credit = 1 audio separation</p>
+
+        <div class="pricing-grid">
                 <div class="pricing-card" onclick="selectCreditPackage(5, 1.00)">
                     <h3>Starter</h3>
                     <div class="pricing-amount">5</div>
@@ -363,7 +372,7 @@
                 <p style="color: #6b7280; margin-bottom: 20px;">All transactions are encrypted and secure. We never store your payment information.</p>
                 <button class="btn btn-secondary" onclick="showPage('dashboard')" style="max-width: 200px; margin: 20px auto;">Back to Dashboard</button>
             </div>
-        </div>
+
     </div>
 
     <!-- Transaction History Modal -->

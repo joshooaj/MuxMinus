@@ -59,6 +59,11 @@ window.addEventListener('popstate', (event) => {
             pages[event.state.page].style.display = 'block';
         }
         
+        // Load page-specific data
+        if (event.state.page === 'purchase' && currentToken) {
+            loadPurchasePage();
+        }
+        
         // Stop polling if not on dashboard
         if (event.state.page !== 'dashboard') {
             stopJobPolling();
@@ -83,6 +88,11 @@ window.addEventListener('popstate', (event) => {
         Object.values(pages).forEach(page => page.style.display = 'none');
         if (pages[targetPage]) {
             pages[targetPage].style.display = 'block';
+        }
+        
+        // Load page-specific data
+        if (targetPage === 'purchase' && currentToken) {
+            loadPurchasePage();
         }
         
         if (targetPage !== 'dashboard') {
@@ -122,8 +132,9 @@ function updateUserInfo() {
     if (currentUser) {
         document.getElementById('user-name').textContent = currentUser.username;
         document.getElementById('user-email').textContent = currentUser.email;
-        document.getElementById('credit-balance').textContent = currentUser.credits.toFixed(1);
-        document.getElementById('header-credits').textContent = currentUser.credits.toFixed(1);
+        const credits = currentUser.credits.toFixed(1);
+        document.getElementById('header-credits').textContent = credits;
+        document.getElementById('header-credits-purchase').textContent = credits;
     }
 }
 
@@ -209,9 +220,29 @@ function logout() {
     showNotification('Logged out successfully', 'info');
 }
 
+// Go Home (Landing or Dashboard depending on auth state)
+window.goHome = function() {
+    if (currentToken) {
+        showPage('dashboard');
+        loadDashboard();
+    } else {
+        showPage('landing');
+    }
+};
+
 // Load Dashboard
 async function loadDashboard() {
     await loadJobList();
+}
+
+// Load Purchase Page
+async function loadPurchasePage() {
+    // Update user info
+    if (currentUser) {
+        document.getElementById('user-name-purchase').textContent = currentUser.username;
+        document.getElementById('user-email-purchase').textContent = currentUser.email;
+        document.getElementById('header-credits-purchase').textContent = currentUser.credits.toFixed(1);
+    }
 }
 
 // Show Transaction History Modal
@@ -818,6 +849,7 @@ document.getElementById('nav-dashboard').addEventListener('click', () => {
 
 document.getElementById('nav-purchase').addEventListener('click', () => {
     showPage('purchase');
+    loadPurchasePage();
 });
 
 document.getElementById('nav-logout').addEventListener('click', logout);
