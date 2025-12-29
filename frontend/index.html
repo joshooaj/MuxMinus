@@ -8,8 +8,131 @@
     <script type="text/javascript" src="https://sandbox.web.squarecdn.com/v1/square.js"></script>
 </head>
 <body>
+    <!-- Landing Page -->
+    <div id="landing-page" class="page">
+        <div class="landing-container">
+            <!-- Hero Section -->
+            <div class="hero-section">
+                <h1 class="hero-title"><span class="logo">🎚️</span> Mux Minus</h1>
+                <p class="hero-subtitle">Professional AI-Powered Audio Source Separation</p>
+                <p class="hero-description">
+                    Separate your music into individual stems: vocals, drums, bass, and instruments. 
+                    Perfect for remixing, karaoke, sampling, and music production.
+                </p>
+                <div class="hero-buttons">
+                    <button class="btn btn-hero" onclick="showPage('register')">Get Started Free</button>
+                    <button class="btn btn-secondary" onclick="showPage('login')">Sign In</button>
+                </div>
+            </div>
+
+            <!-- Demo Section -->
+            <div class="demo-section">
+                <h2>🎵 Try It Out</h2>
+                <p>Listen to an example of what Mux Minus can do:</p>
+                
+                <div class="demo-player">
+                    <h3>Original Song</h3>
+                    <audio controls style="width: 100%;">
+                        <source src="/demo/original.mp3" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+
+                <div class="stems-demo-grid">
+                    <div class="stem-demo-card">
+                        <h4>🎤 Vocals</h4>
+                        <audio controls style="width: 100%;">
+                            <source src="/demo/vocals.mp3" type="audio/mpeg">
+                        </audio>
+                    </div>
+                    <div class="stem-demo-card">
+                        <h4>🙊 No Vocals</h4>
+                        <audio controls style="width: 100%;">
+                            <source src="/demo/no_vocals.mp3" type="audio/mpeg">
+                        </audio>
+                    </div>
+                    <div class="stem-demo-card">
+                        <h4>🥁 Drums</h4>
+                        <audio controls style="width: 100%;">
+                            <source src="/demo/drums.mp3" type="audio/mpeg">
+                        </audio>
+                    </div>
+                    <div class="stem-demo-card">
+                        <h4>🎸 Bass</h4>
+                        <audio controls style="width: 100%;">
+                            <source src="/demo/bass.mp3" type="audio/mpeg">
+                        </audio>
+                    </div>
+                    <div class="stem-demo-card">
+                        <h4>🎹 Other</h4>
+                        <audio controls style="width: 100%;">
+                            <source src="/demo/other.mp3" type="audio/mpeg">
+                        </audio>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features Section -->
+            <div class="features-section">
+                <h2>✨ Features</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🤖</div>
+                        <h3>AI-Powered</h3>
+                        <p>Uses state-of-the-art deep learning models for high-quality separation</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>Fast Processing</h3>
+                        <p>Get your separated tracks in minutes, not hours</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎵</div>
+                        <h3>Multiple Formats</h3>
+                        <p>Supports MP3, WAV, FLAC, and more audio formats</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">💰</div>
+                        <h3>Pay As You Go</h3>
+                        <p>Only pay for what you use. Start with 3 free credits!</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎚️</div>
+                        <h3>2 or 4 Stems</h3>
+                        <p>Choose between 4-stem separation or faster 2-stem karaoke mode</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔒</div>
+                        <h3>Secure & Private</h3>
+                        <p>Your audio files are processed securely and deleted after completion</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Open Source Section -->
+            <div class="opensource-section">
+                <h2>🔓 Built on Open Source</h2>
+                <p>
+                    Mux Minus is powered by <a href="https://github.com/facebookresearch/demucs" target="_blank" rel="noopener">Demucs</a>, 
+                    a free and open-source music source separation library developed by Facebook Research and released under the MIT License.
+                </p>
+                <p>
+                    We believe in making professional audio tools accessible to everyone. Try it today!
+                </p>
+            </div>
+
+            <!-- CTA Section -->
+            <div class="cta-section">
+                <h2>Ready to Get Started?</h2>
+                <p>Sign up now and get 3 free credits to try Mux Minus</p>
+                <button class="btn btn-hero btn-large" onclick="showPage('register')">Create Free Account</button>
+                <p class="cta-note">Already have an account? <a href="#" onclick="showPage('login'); return false;">Sign in</a></p>
+            </div>
+        </div>
+    </div>
+
     <!-- Login Page -->
-    <div id="login-page" class="page">
+    <div id="login-page" class="page" style="display: none;">
         <div class="auth-container">
             <div class="auth-card">
                 <h1><span class="logo">🎚️</span> Mux Minus</h1>

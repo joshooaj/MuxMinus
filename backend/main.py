@@ -82,6 +82,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files for frontend demo audio
+FRONTEND_DIR = Path("/app/frontend")
+if FRONTEND_DIR.exists():
+    app.mount("/demo", StaticFiles(directory=str(FRONTEND_DIR / "demo")), name="demo")
+    logger.info(f"Mounted frontend demo directory at /demo")
+
 # Credit cost per job
 CREDIT_COST_PER_JOB = 1.0
 

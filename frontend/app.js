@@ -10,6 +10,7 @@ let selectedPackage = null;
 
 // Page Navigation
 const pages = {
+    landing: document.getElementById('landing-page'),
     login: document.getElementById('login-page'),
     register: document.getElementById('register-page'),
     dashboard: document.getElementById('dashboard-page'),
@@ -767,8 +768,10 @@ document.getElementById('show-login').addEventListener('click', (e) => {
         targetPage = 'dashboard';
     } else if (path === '/register') {
         targetPage = 'register';
-    } else if (path === '/' || path === '/login') {
-        targetPage = isAuthenticated ? 'dashboard' : 'login';
+    } else if (path === '/login') {
+        targetPage = 'login';
+    } else if (path === '/' || path === '/landing') {
+        targetPage = isAuthenticated ? 'dashboard' : 'landing';
     }
     
     if (isAuthenticated) {
@@ -777,6 +780,11 @@ document.getElementById('show-login').addEventListener('click', (e) => {
             await loadDashboard();
         }
     } else {
-        showPage(targetPage === 'register' ? 'register' : 'login');
+        // Non-authenticated users see landing page by default
+        if (targetPage === 'login' || targetPage === 'register') {
+            showPage(targetPage);
+        } else {
+            showPage('landing');
+        }
     }
 })();

@@ -4,3 +4,4 @@ backend/files/
 .playwright-mcp/
 **/node_modules/
 .env
+**/demo/
