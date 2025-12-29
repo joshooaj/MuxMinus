@@ -390,6 +390,10 @@ async function loadJobList() {
                 const jobId = row.getAttribute('data-job-id');
                 existingRows.set(jobId, row);
             });
+            
+            // Remove any non-job rows (like loading messages)
+            const nonJobRows = Array.from(tbody.querySelectorAll('tr:not([data-job-id])'));
+            nonJobRows.forEach(row => row.remove());
 
             jobs.forEach(job => {
                 const existingRow = existingRows.get(job.id);
