@@ -221,7 +221,7 @@
                 <h2>Welcome, <span id="user-name">User</span>!</h2>
                 <p id="user-email">user@example.com</p>
             </div>
-            <div class="credit-display">
+            <div class="credit-display" onclick="showTransactionHistory()" style="cursor: pointer;" title="Click to view transaction history">
                 <div class="credit-amount"><span id="header-credits">0</span></div>
                 <div class="credit-label">Credits Available</div>
             </div>
@@ -235,22 +235,6 @@
         </div>
 
         <div class="dashboard-grid">
-            <div class="dashboard-card">
-                <h3>💰 Recent Transactions</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Description</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody id="transaction-history">
-                        <tr><td colspan="3" style="text-align: center; color: #999;">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
             <div class="dashboard-card">
                 <h3>🎵 Your Jobs</h3>
                 <table>
@@ -384,6 +368,35 @@
                 <h3>🔒 Secure Payment with Square</h3>
                 <p style="color: #6b7280; margin-bottom: 20px;">All transactions are encrypted and secure. We never store your payment information.</p>
                 <button class="btn btn-secondary" onclick="showPage('dashboard')" style="max-width: 200px; margin: 20px auto;">Back to Dashboard</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction History Modal -->
+    <div id="transaction-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💰 Transaction History</h2>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button class="btn btn-secondary" onclick="exportTransactionHistory()" style="padding: 8px 16px; font-size: 0.9rem;">
+                        💾 Export CSV
+                    </button>
+                    <button class="modal-close" onclick="closeTransactionHistory()">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transaction-history">
+                        <tr><td colspan="3" style="text-align: center; color: #999;">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

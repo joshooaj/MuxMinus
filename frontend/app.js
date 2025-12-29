@@ -7,6 +7,7 @@ let squarePayments = null;
 let jobPollingInterval = null; // For automatic job status updates
 let squareCard = null;
 let selectedPackage = null;
+let transactionsData = []; // Store transactions for export
 
 // Page Navigation
 const pages = {
@@ -182,11 +183,29 @@ function logout() {
 
 // Load Dashboard
 async function loadDashboard() {
-    await Promise.all([
-        loadTransactionHistory(),
-        loadJobList()
-    ]);
+    await loadJobList();
 }
+
+// Show Transaction History Modal
+window.showTransactionHistory = async function() {
+    const modal = document.getElementById('transaction-modal');
+    modal.style.display = 'flex';
+    await loadTransactionHistory();
+};
+
+// Close Transaction History Modal
+window.closeTransactionHistory = function() {
+    const modal = document.getElementById('transaction-modal');
+    modal.style.display = 'none';
+};
+
+// Close modal when clicking outside of it
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('transaction-modal');
+    if (event.target === modal) {
+        closeTransactionHistory();
+    }
+});
 
 // Load Transaction History
 async function loadTransactionHistory() {
@@ -198,6 +217,7 @@ async function loadTransactionHistory() {
         if (response.ok) {
             const data = await response.json();
             const transactions = data.transactions || [];
+            transactionsData = transactions; // Store for export
             const tbody = document.getElementById('transaction-history');
             tbody.innerHTML = '';
 
@@ -223,6 +243,42 @@ async function loadTransactionHistory() {
         console.error('Failed to load transaction history:', error);
     }
 }
+
+// Export Transaction History to CSV
+window.exportTransactionHistory = function() {
+    if (!transactionsData || transactionsData.length === 0) {
+        showNotification('No transactions to export', 'info');
+        return;
+    }
+
+    // Create CSV header
+    const csvRows = [];
+    csvRows.push(['Date', 'Description', 'Amount', 'Credits', 'Balance'].join(','));
+
+    // Add transaction rows
+    transactionsData.forEach(tx => {
+        const date = new Date(tx.created_at).toLocaleString();
+        const description = `"${tx.description.replace(/"/g, '""')}"`;
+        const amount = tx.amount.toFixed(1);
+        const balance = tx.balance_after ? tx.balance_after.toFixed(1) : '';
+        
+        csvRows.push([date, description, amount, balance].join(','));
+    });
+
+    // Create blob and download
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `muxminus_transactions_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    showNotification('Transaction history exported', 'success');
+};
 
 // Load Job List
 async function loadJobList() {
