@@ -884,6 +884,28 @@ window.downloadSingleStem = async function(jobId, stemName) {
 };
 
 // Square Payment Integration
+// Load Square SDK dynamically based on environment
+async function loadSquareSDK(environment) {
+    return new Promise((resolve, reject) => {
+        // Check if already loaded
+        if (window.Square) {
+            resolve();
+            return;
+        }
+        
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = environment === 'production' 
+            ? 'https://web.squarecdn.com/v1/square.js'
+            : 'https://sandbox.web.squarecdn.com/v1/square.js';
+        
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Square SDK'));
+        
+        document.head.appendChild(script);
+    });
+}
+
 async function initializeSquarePayments() {
     try {
         const response = await fetch(`${API_URL}/credits/square-config`, {
@@ -895,6 +917,9 @@ async function initializeSquarePayments() {
         }
         
         const config = await response.json();
+        
+        // Load the appropriate Square SDK
+        await loadSquareSDK(config.environment);
         
         if (!window.Square) {
             throw new Error('Square.js failed to load');
