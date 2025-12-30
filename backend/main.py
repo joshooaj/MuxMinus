@@ -82,15 +82,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add middleware to log requests with real IP
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Log requests using X-Real-IP header if available."""
-    real_ip = request.headers.get("X-Real-IP") or request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or (request.client.host if request.client else "unknown")
-    logger.info(f"{request.method} {request.url.path} from {real_ip}")
-    response = await call_next(request)
-    return response
-
 # Mount static files for frontend demo audio
 FRONTEND_DIR = Path("/app/frontend")
 if FRONTEND_DIR.exists():
