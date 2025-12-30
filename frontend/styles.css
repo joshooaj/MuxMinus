@@ -152,6 +152,17 @@ body {
     font-size: 0.9rem;
 }
 
+.success-message {
+    display: none;
+    background: #efe;
+    border: 2px solid var(--success);
+    color: var(--success);
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+}
+
 .auth-footer {
     text-align: center;
     margin-top: 20px;

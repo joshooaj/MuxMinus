@@ -150,6 +150,22 @@ class UserProfile(BaseModel):
     is_admin: int = 0
 
 
+class UpdateEmail(BaseModel):
+    """Update email request."""
+    email: EmailStr
+
+
+class UpdateUsername(BaseModel):
+    """Update username request."""
+    username: str
+
+
+class UpdatePassword(BaseModel):
+    """Update password request."""
+    current_password: str
+    new_password: str
+
+
 class JobResponse(BaseModel):
     """Job information response."""
     id: str
@@ -402,6 +418,67 @@ async def get_profile(current_user: User = Depends(get_current_user)):
         created_at=current_user.created_at,
         is_admin=current_user.is_admin
     )
+
+
+@app.put("/auth/email")
+async def update_email(
+    update_data: UpdateEmail,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user email address."""
+    # Check if email is already taken
+    existing_user = db.query(User).filter(User.email == update_data.email).first()
+    if existing_user and existing_user.id != current_user.id:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    current_user.email = update_data.email
+    db.commit()
+    
+    return {"message": "Email updated successfully"}
+
+
+@app.put("/auth/username")
+async def update_username(
+    update_data: UpdateUsername,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update username."""
+    if not update_data.username or len(update_data.username.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Username must be at least 2 characters")
+    
+    # Check if username is already taken
+    existing_user = db.query(User).filter(User.username == update_data.username.strip()).first()
+    if existing_user and existing_user.id != current_user.id:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
+    current_user.username = update_data.username.strip()
+    db.commit()
+    
+    return {"message": "Username updated successfully"}
+
+
+@app.put("/auth/password")
+async def update_password(
+    update_data: UpdatePassword,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user password."""
+    # Verify current password
+    if not verify_password(update_data.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Validate new password
+    if len(update_data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    
+    # Update password
+    current_user.password_hash = get_password_hash(update_data.new_password)
+    db.commit()
+    
+    return {"message": "Password updated successfully"}
 
 
 # ============================================================================

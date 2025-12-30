@@ -219,7 +219,6 @@
             <h1 class="clickable-logo" onclick="goHome()"><span class="logo">🎚️</span> Mux Minus</h1>
             <div class="user-info">
                 <h2>Welcome, <span id="user-name">User</span>!</h2>
-                <p id="user-email">user@example.com</p>
             </div>
             <div class="credit-display" onclick="showTransactionHistory()" style="cursor: pointer;" title="Click to view transaction history">
                 <div class="credit-amount"><span id="header-credits">0</span></div>
@@ -231,6 +230,7 @@
         <div class="nav-buttons">
             <button id="nav-dashboard" class="nav-btn">Dashboard</button>
             <button id="nav-purchase" class="nav-btn">Buy Credits</button>
+            <button id="nav-profile" class="nav-btn">Profile</button>
             <button id="nav-logout" class="nav-btn">Logout</button>
         </div>
 
@@ -306,13 +306,82 @@
         </div>
     </div>
 
+    <!-- Profile Page -->
+    <div id="profile-page" class="page">
+        <div class="dashboard-header">
+            <h1 class="clickable-logo" onclick="goHome()"><span class="logo">🎚️</span> Mux Minus</h1>
+            <div class="user-info">
+                <h2>Profile Settings</h2>
+            </div>
+            <div class="credit-display" onclick="showTransactionHistory()" style="cursor: pointer;" title="Click to view transaction history">
+                <div class="credit-amount"><span id="header-credits-profile">0</span></div>
+                <div class="credit-label">Credits Available</div>
+            </div>
+        </div>
+
+        <div class="nav-buttons">
+            <button id="nav-dashboard-profile" class="nav-btn">Dashboard</button>
+            <button id="nav-purchase-profile" class="nav-btn">Buy Credits</button>
+            <button id="nav-profile-profile" class="nav-btn">Profile</button>
+            <button id="nav-logout-profile" class="nav-btn">Logout</button>
+        </div>
+
+        <div class="dashboard-card" style="max-width: 600px; margin: 0 auto;">
+            <h3>👤 Account Information</h3>
+            <p class="subtitle">Manage your account details</p>
+
+            <!-- Update Email -->
+            <div style="margin-bottom: 30px;">
+                <h4>Email Address</h4>
+                <p style="color: #999; margin-bottom: 10px;">Current: <span id="current-email">user@example.com</span></p>
+                <form id="update-email-form" onsubmit="updateEmail(event)">
+                    <div id="email-error" class="error-message"></div>
+                    <div id="email-success" class="success-message" style="display: none;"></div>
+                    <input type="email" id="new-email" placeholder="New email address" required>
+                    <button type="submit" class="btn">Update Email</button>
+                </form>
+            </div>
+
+            <!-- Update Username -->
+            <div style="margin-bottom: 30px;">
+                <h4>Username</h4>
+                <p style="color: #999; margin-bottom: 10px;">Current: <span id="current-username">User</span></p>
+                <form id="update-username-form" onsubmit="updateUsername(event)">
+                    <div id="username-error" class="error-message"></div>
+                    <div id="username-success" class="success-message" style="display: none;"></div>
+                    <input type="text" id="new-username" placeholder="New username" required>
+                    <button type="submit" class="btn">Update Username</button>
+                </form>
+            </div>
+
+            <!-- Update Password -->
+            <div style="margin-bottom: 30px;">
+                <h4>Password</h4>
+                <form id="update-password-form" onsubmit="updatePassword(event)">
+                    <div id="password-error" class="error-message"></div>
+                    <div id="password-success" class="success-message" style="display: none;"></div>
+                    <input type="password" id="current-password" placeholder="Current password" required>
+                    <input type="password" id="new-password" placeholder="New password (min 6 characters)" required minlength="6">
+                    <input type="password" id="confirm-password" placeholder="Confirm new password" required>
+                    <button type="submit" class="btn">Update Password</button>
+                </form>
+            </div>
+
+            <!-- Account Info -->
+            <div style="padding: 20px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                <h4>Account Details</h4>
+                <p style="color: #999; margin: 5px 0;">Member since: <span id="member-since">-</span></p>
+                <p style="color: #999; margin: 5px 0;">Account ID: <span id="account-id">-</span></p>
+            </div>
+        </div>
+    </div>
+
     <!-- Purchase Page -->
     <div id="purchase-page" class="page">
         <div class="dashboard-header">
             <h1 class="clickable-logo" onclick="goHome()"><span class="logo">🎚️</span> Mux Minus</h1>
             <div class="user-info">
                 <h2>Welcome, <span id="user-name-purchase">User</span>!</h2>
-                <p id="user-email-purchase">user@example.com</p>
             </div>
             <div class="credit-display" onclick="showTransactionHistory()" style="cursor: pointer;" title="Click to view transaction history">
                 <div class="credit-amount"><span id="header-credits-purchase">0</span></div>
@@ -407,7 +476,6 @@
             <h1 class="clickable-logo" onclick="goHome()"><span class="logo">🎚️</span> Mux Minus</h1>
             <div class="user-info">
                 <h2>Admin Panel</h2>
-                <p id="admin-user-email">admin@example.com</p>
             </div>
             <div class="credit-display">
                 <div class="credit-amount">👑</div>

@@ -16,6 +16,7 @@ const pages = {
     register: document.getElementById('register-page'),
     dashboard: document.getElementById('dashboard-page'),
     purchase: document.getElementById('purchase-page'),
+    profile: document.getElementById('profile-page'),
     admin: document.getElementById('admin-page')
 };
 
@@ -36,6 +37,8 @@ function showPage(pageName) {
             path = '/dashboard';
         } else if (pageName === 'purchase') {
             path = '/purchase';
+        } else if (pageName === 'profile') {
+            path = '/profile';
         } else if (pageName === 'admin') {
             path = '/admin';
         }
@@ -65,6 +68,8 @@ window.addEventListener('popstate', (event) => {
         // Load page-specific data
         if (event.state.page === 'purchase' && currentToken) {
             loadPurchasePage();
+        } else if (event.state.page === 'profile' && currentToken) {
+            loadProfilePage();
         } else if (event.state.page === 'admin' && currentToken) {
             loadAdminPage();
         }
@@ -139,10 +144,15 @@ async function checkAuth() {
 function updateUserInfo() {
     if (currentUser) {
         document.getElementById('user-name').textContent = currentUser.username;
-        document.getElementById('user-email').textContent = currentUser.email;
         const credits = currentUser.credits.toFixed(1);
         document.getElementById('header-credits').textContent = credits;
         document.getElementById('header-credits-purchase').textContent = credits;
+        
+        // Update profile page if it exists
+        const profileCredits = document.getElementById('header-credits-profile');
+        if (profileCredits) {
+            profileCredits.textContent = credits;
+        }
         
         // Show admin button if user is admin
         const adminButton = document.getElementById('admin-button');
@@ -254,10 +264,183 @@ async function loadPurchasePage() {
     // Update user info
     if (currentUser) {
         document.getElementById('user-name-purchase').textContent = currentUser.username;
-        document.getElementById('user-email-purchase').textContent = currentUser.email;
         document.getElementById('header-credits-purchase').textContent = currentUser.credits.toFixed(1);
     }
 }
+
+// Load Profile Page
+async function loadProfilePage() {
+    if (!currentUser) return;
+    
+    // Populate current values
+    document.getElementById('current-email').textContent = currentUser.email;
+    document.getElementById('current-username').textContent = currentUser.username;
+    document.getElementById('header-credits-profile').textContent = currentUser.credits.toFixed(1);
+    document.getElementById('account-id').textContent = currentUser.id;
+    
+    // Format member since date
+    const memberSince = new Date(currentUser.created_at);
+    document.getElementById('member-since').textContent = memberSince.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    
+    // Clear forms
+    document.getElementById('update-email-form').reset();
+    document.getElementById('update-username-form').reset();
+    document.getElementById('update-password-form').reset();
+    
+    // Clear messages
+    ['email', 'username', 'password'].forEach(type => {
+        const errorDiv = document.getElementById(`${type}-error`);
+        const successDiv = document.getElementById(`${type}-success`);
+        if (errorDiv) errorDiv.textContent = '';
+        if (successDiv) successDiv.style.display = 'none';
+    });
+}
+
+// Update Email
+window.updateEmail = async function(event) {
+    event.preventDefault();
+    const errorDiv = document.getElementById('email-error');
+    const successDiv = document.getElementById('email-success');
+    const newEmail = document.getElementById('new-email').value;
+    
+    errorDiv.textContent = '';
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_URL}/auth/email`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email: newEmail })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to update email');
+        }
+        
+        // Update current user
+        currentUser.email = newEmail;
+        document.getElementById('current-email').textContent = newEmail;
+        document.getElementById('update-email-form').reset();
+        
+        // Show success message
+        successDiv.textContent = 'Email updated successfully!';
+        successDiv.style.display = 'block';
+        setTimeout(() => {
+            successDiv.style.display = 'none';
+        }, 3000);
+    } catch (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.display = 'block';
+    }
+};
+
+// Update Username
+window.updateUsername = async function(event) {
+    event.preventDefault();
+    const errorDiv = document.getElementById('username-error');
+    const successDiv = document.getElementById('username-success');
+    const newUsername = document.getElementById('new-username').value;
+    
+    errorDiv.textContent = '';
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_URL}/auth/username`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username: newUsername })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to update username');
+        }
+        
+        // Update current user and UI
+        currentUser.username = newUsername;
+        document.getElementById('current-username').textContent = newUsername;
+        document.getElementById('user-name').textContent = newUsername;
+        document.getElementById('user-name-purchase').textContent = newUsername;
+        document.getElementById('update-username-form').reset();
+        
+        // Show success message
+        successDiv.textContent = 'Username updated successfully!';
+        successDiv.style.display = 'block';
+        setTimeout(() => {
+            successDiv.style.display = 'none';
+        }, 3000);
+    } catch (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.display = 'block';
+    }
+};
+
+// Update Password
+window.updatePassword = async function(event) {
+    event.preventDefault();
+    const errorDiv = document.getElementById('password-error');
+    const successDiv = document.getElementById('password-success');
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    
+    errorDiv.textContent = '';
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+    
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+        errorDiv.textContent = 'New passwords do not match';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/auth/password`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to update password');
+        }
+        
+        document.getElementById('update-password-form').reset();
+        
+        // Show success message
+        successDiv.textContent = 'Password updated successfully!';
+        successDiv.style.display = 'block';
+        setTimeout(() => {
+            successDiv.style.display = 'none';
+        }, 3000);
+    } catch (error) {
+        errorDiv.textContent = error.message;
+        errorDiv.style.display = 'block';
+    }
+};
 
 // Show Transaction History Modal
 window.showTransactionHistory = async function() {
@@ -1065,7 +1248,30 @@ document.getElementById('nav-purchase').addEventListener('click', () => {
     loadPurchasePage();
 });
 
+document.getElementById('nav-profile').addEventListener('click', () => {
+    showPage('profile');
+    loadProfilePage();
+});
+
 document.getElementById('nav-logout').addEventListener('click', logout);
+
+// Profile page nav buttons
+document.getElementById('nav-dashboard-profile').addEventListener('click', () => {
+    showPage('dashboard');
+    loadDashboard();
+});
+
+document.getElementById('nav-purchase-profile').addEventListener('click', () => {
+    showPage('purchase');
+    loadPurchasePage();
+});
+
+document.getElementById('nav-profile-profile').addEventListener('click', () => {
+    showPage('profile');
+    loadProfilePage();
+});
+
+document.getElementById('nav-logout-profile').addEventListener('click', logout);
 
 document.getElementById('show-register').addEventListener('click', (e) => {
     e.preventDefault();
