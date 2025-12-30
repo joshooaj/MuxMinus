@@ -579,7 +579,13 @@ window.exportTransactionHistory = function() {
 
     // Add transaction rows
     transactionsData.forEach(tx => {
-        const date = new Date(tx.created_at).toLocaleString();
+        const date = new Date(tx.created_at + 'Z').toLocaleString(undefined, {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
         const description = `"${tx.description.replace(/"/g, '""')}"`;
         const amount = tx.amount.toFixed(1);
         const balance = tx.balance_after ? tx.balance_after.toFixed(1) : '';
@@ -647,6 +653,9 @@ async function loadJobList() {
             // Remove any non-job rows (like loading messages)
             const nonJobRows = Array.from(tbody.querySelectorAll('tr:not([data-job-id])'));
             nonJobRows.forEach(row => row.remove());
+            
+            // Clear tbody to rebuild in correct order
+            tbody.innerHTML = '';
 
             jobs.forEach(job => {
                 const existingRow = existingRows.get(job.id);
@@ -658,48 +667,30 @@ async function loadJobList() {
                     statusBadge += ' <span style="animation: pulse 1.5s infinite;">⏳</span>';
                 }
 
+                let row;
                 if (existingRow) {
-                    // Update existing row ONLY if status changed
-                    const currentStatus = existingRow.getAttribute('data-status');
-                    if (currentStatus !== job.status) {
-                        // Only update the cells that changed, preserve the row itself
-                        existingRow.cells[2].innerHTML = statusBadge;
-                        existingRow.cells[4].innerHTML = job.status.toUpperCase() === 'COMPLETED' ? 
-                            `<button onclick="showJobDetails('${job.id}')" class="btn-download">View/Play</button>
-                             <button onclick="downloadJob('${job.id}')" class="btn-download">Download</button>` : 
-                            `<button onclick="checkJobStatus('${job.id}')" class="btn-refresh">Refresh</button>`;
-                        
-                        existingRow.setAttribute('data-status', job.status);
-                        
-                        // If job just completed, create the details row
-                        if (job.status.toUpperCase() === 'COMPLETED') {
-                            let detailsRow = document.getElementById(`job-details-${job.id}`);
-                            if (!detailsRow) {
-                                detailsRow = document.createElement('tr');
-                                detailsRow.id = `job-details-${job.id}`;
-                                detailsRow.style.display = 'none';
-                                detailsRow.innerHTML = `
-                                    <td colspan="5" style="padding: 20px; background: #f9fafb;">
-                                        <div id="stems-${job.id}" style="display: flex; flex-direction: column; gap: 15px;">
-                                            <p style="color: #667eea; font-weight: 600;">Loading stems...</p>
-                                        </div>
-                                    </td>
-                                `;
-                                existingRow.insertAdjacentElement('afterend', detailsRow);
-                            }
-                        }
-                    }
-                    existingRows.delete(job.id);
+                    // Reuse existing row to preserve any state
+                    row = existingRow;
+                    // Update row data
+                    row.cells[2].innerHTML = statusBadge;
+                    row.cells[4].innerHTML = job.status.toUpperCase() === 'COMPLETED' ? 
+                        `<button onclick="showJobDetails('${job.id}')" class="btn-download">View/Play</button>
+                         <button onclick="downloadJob('${job.id}')" class="btn-download">Download</button>` : 
+                        `<button onclick="checkJobStatus('${job.id}')" class="btn-refresh">Refresh</button>`;
+                    row.setAttribute('data-status', job.status);
                 } else {
-                    // New job - add it at the top
-                    const row = document.createElement('tr');
+                    // Create new job row
+                    row = document.createElement('tr');
                     row.setAttribute('data-job-id', job.id);
                     row.setAttribute('data-status', job.status);
                     row.innerHTML = `
                         <td>${job.filename}</td>
                         <td>${job.model}</td>
                         <td>${statusBadge}</td>
-                        <td>${new Date(job.created_at).toLocaleString()}</td>
+                        <td>${new Date(job.created_at + 'Z').toLocaleString(undefined, { 
+                            dateStyle: 'short', 
+                            timeStyle: 'short'
+                        })}</td>
                         <td>
                             ${job.status.toUpperCase() === 'COMPLETED' ? 
                                 `<button onclick="showJobDetails('${job.id}')" class="btn-download">View/Play</button>
@@ -708,11 +699,16 @@ async function loadJobList() {
                             }
                         </td>
                     `;
-                    tbody.insertBefore(row, tbody.firstChild);
-                    
-                    // Add details row if completed
-                    if (job.status.toUpperCase() === 'COMPLETED') {
-                        const detailsRow = document.createElement('tr');
+                }
+                
+                // Append row in order (jobs array is already sorted newest first)
+                tbody.appendChild(row);
+                
+                // Ensure details row exists and is in correct position for completed jobs
+                if (job.status.toUpperCase() === 'COMPLETED') {
+                    let detailsRow = document.getElementById(`job-details-${job.id}`);
+                    if (!detailsRow) {
+                        detailsRow = document.createElement('tr');
                         detailsRow.id = `job-details-${job.id}`;
                         detailsRow.style.display = 'none';
                         detailsRow.innerHTML = `
@@ -722,9 +718,12 @@ async function loadJobList() {
                                 </div>
                             </td>
                         `;
-                        row.insertAdjacentElement('afterend', detailsRow);
                     }
+                    // Insert details row after the job row
+                    row.insertAdjacentElement('afterend', detailsRow);
                 }
+                
+                existingRows.delete(job.id);
             });
 
             // Remove jobs that no longer exist
@@ -1605,7 +1604,10 @@ async function loadAdminJobs() {
                 <td>${job.filename}</td>
                 <td>${job.status}</td>
                 <td>${job.archived ? 'Yes' : 'No'}</td>
-                <td>${new Date(job.created_at).toLocaleString()}</td>
+                <td>${new Date(job.created_at + 'Z').toLocaleString(undefined, { 
+                    dateStyle: 'short', 
+                    timeStyle: 'short'
+                })}</td>
                 <td>
                     ${!job.archived ? `<button class="action-btn" onclick="archiveJob('${job.id}')">Archive</button>` : ''}
                     <button class="action-btn delete-btn" onclick="deleteJob('${job.id}')">Delete</button>
@@ -1638,14 +1640,20 @@ async function viewAdminUser(userId) {
         document.getElementById('admin-user-credits').textContent = user.credits;
         document.getElementById('admin-user-status').textContent = user.active ? 'Active' : 'Disabled';
         document.getElementById('admin-user-admin').textContent = user.is_admin ? 'Yes' : 'No';
-        document.getElementById('admin-user-created').textContent = new Date(user.created_at).toLocaleString();
+        document.getElementById('admin-user-created').textContent = new Date(user.created_at + 'Z').toLocaleString(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'short'
+        });
         
         // Render jobs
         const jobsHtml = user.jobs && user.jobs.length > 0 ? user.jobs.map(job => `
             <tr>
                 <td>${job.filename}</td>
                 <td>${job.status}</td>
-                <td>${new Date(job.created_at).toLocaleString()}</td>
+                <td>${new Date(job.created_at + 'Z').toLocaleString(undefined, { 
+                    dateStyle: 'short', 
+                    timeStyle: 'short'
+                })}</td>
             </tr>
         `).join('') : '<tr><td colspan="3">No jobs</td></tr>';
         
@@ -1656,7 +1664,10 @@ async function viewAdminUser(userId) {
             <tr>
                 <td>${tx.amount > 0 ? '+' : ''}${tx.amount}</td>
                 <td>${tx.description}</td>
-                <td>${new Date(tx.created_at).toLocaleString()}</td>
+                <td>${new Date(tx.created_at + 'Z').toLocaleString(undefined, { 
+                    dateStyle: 'short', 
+                    timeStyle: 'short'
+                })}</td>
             </tr>
         `).join('') : '<tr><td colspan="3">No transactions</td></tr>';
         

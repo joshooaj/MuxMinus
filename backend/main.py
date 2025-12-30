@@ -1101,7 +1101,8 @@ async def list_jobs(
                 created_at=job.created_at,
                 started_at=job.started_at,
                 completed_at=job.completed_at,
-                download_url=f"/download/{job.id}" if job.status == JobStatus.COMPLETED else None
+                download_url=f"/download/{job.id}" if job.status == JobStatus.COMPLETED else None,
+                demucs_command=job.demucs_command
             )
             for job in jobs
         ]
