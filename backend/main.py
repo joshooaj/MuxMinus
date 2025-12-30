@@ -1138,6 +1138,66 @@ async def get_job(
     )
 
 
+@app.delete("/jobs")
+async def delete_jobs(
+    job_ids: list[str],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete multiple jobs by ID."""
+    if not job_ids:
+        raise HTTPException(status_code=400, detail="No job IDs provided")
+    
+    deleted_count = 0
+    errors = []
+    
+    for job_id in job_ids:
+        try:
+            job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
+            
+            if not job:
+                errors.append(f"Job {job_id} not found or not owned by user")
+                continue
+            
+            # Delete associated files
+            try:
+                # Delete upload file
+                for ext in ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']:
+                    upload_file = UPLOAD_DIR / f"{job_id}{ext}"
+                    if upload_file.exists():
+                        upload_file.unlink()
+                        break
+                
+                # Delete completed files directory
+                completed_dir = COMPLETED_DIR / job_id
+                if completed_dir.exists():
+                    shutil.rmtree(completed_dir)
+                
+                # Delete temp files directory
+                temp_dir = TEMP_DIR / job_id
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
+                    
+            except Exception as e:
+                logger.warning(f"Error deleting files for job {job_id}: {e}")
+            
+            # Delete job from database
+            db.delete(job)
+            deleted_count += 1
+            
+        except Exception as e:
+            errors.append(f"Error deleting job {job_id}: {str(e)}")
+            logger.error(f"Error deleting job {job_id}: {e}")
+    
+    db.commit()
+    
+    return {
+        "deleted": deleted_count,
+        "errors": errors,
+        "message": f"Successfully deleted {deleted_count} job(s)"
+    }
+
+
 # ============================================================================
 # General Endpoints
 # ============================================================================

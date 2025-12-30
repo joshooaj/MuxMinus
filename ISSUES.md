@@ -2,25 +2,9 @@
 
 ## Open Issues
 
-### Users cannot change the name or email
-
-Users should be able to modify their name or email address, or delete their account completely.
-
-### Remove email address from welcome message in header
-
-The user doesn't need to see their email address at the top of the page
-
 ### API Support
 
 Allow users to generate an API key and use the service through a REST api.
-
-### Admin Page
-
-Build an admin page where I can see all the users, how many credits they have remaining, disable their accounts, or modify the number of credits in their account, and manage their completed jobs (download, or delete the job, or delete the files and mark them as expired).
-
-### Bulk Upload
-
-Allow user to upload a folder of files and if they have enough credits, process them all.
 
 ### Add SSO
 
@@ -31,6 +15,22 @@ The user should be able to register or login using single sign-on with at least 
 I do not want to hold on to the user's original song after it has been processed, and I don't want to keep the stem files longer than I have to. Maybe we delete the stems after 1 day to avoid holding on to copyrighted music longer than necessary?
 
 ## Completed Issues
+
+### Show demucs CLI command
+
+Users can now see the exact demucs CLI command that was used to process each job. When viewing a completed job's stems, the command is displayed in a code block above the audio players with a convenient "Copy" button. Jobs processed before this feature was added will not show a command.
+
+### Bulk Upload
+
+Users can now select and upload multiple audio files at once. The interface shows all selected files with their sizes, calculates the total credit cost, and uploads each file sequentially with progress feedback.
+
+### Users cannot change the name or email
+
+Users can now modify their email address, username, and password through the new Profile page accessible from the navigation menu.
+
+### Remove email address from welcome message in header
+
+The email address has been removed from all page headers. User information now only shows the username and credits.
 
 ### Back-button / route support
 
@@ -92,3 +92,10 @@ The front page should...
 
 If you expand a completed job by clicking View/Play while a job is processing, after a few seconds the content collapses and you have to click "View/Play" again. I think it's related to the job polling behavior?
 
+### Admin Page
+
+Build an admin page where I can see all the users, how many credits they have remaining, disable their accounts, or modify the number of credits in their account, and manage their completed jobs (download, or delete the job, or delete the files and mark them as expired).
+
+### Enable users to delete jobs
+
+Add a "select all" checkbox at the left side of the table header in the jobs table, and add a checkbox to the left of each job. Allow the user to select one or all jobs and while there is at least one job selected, allow the user to click a "Delete" button above the table to the right.

@@ -621,7 +621,7 @@ async function loadJobList() {
             const tbody = document.getElementById('job-list');
 
             if (jobs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">No jobs yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">No jobs yet</td></tr>';
                 stopJobPolling();
                 return;
             }
@@ -669,11 +669,11 @@ async function loadJobList() {
 
                 let row;
                 if (existingRow) {
-                    // Reuse existing row to preserve any state
+                    // Reuse existing row to preserve any state (including checkbox state)
                     row = existingRow;
                     // Update row data
-                    row.cells[2].innerHTML = statusBadge;
-                    row.cells[4].innerHTML = job.status.toUpperCase() === 'COMPLETED' ? 
+                    row.cells[3].innerHTML = statusBadge;
+                    row.cells[5].innerHTML = job.status.toUpperCase() === 'COMPLETED' ? 
                         `<button onclick="showJobDetails('${job.id}')" class="btn-download">View/Play</button>
                          <button onclick="downloadJob('${job.id}')" class="btn-download">Download</button>` : 
                         `<button onclick="checkJobStatus('${job.id}')" class="btn-refresh">Refresh</button>`;
@@ -684,6 +684,9 @@ async function loadJobList() {
                     row.setAttribute('data-job-id', job.id);
                     row.setAttribute('data-status', job.status);
                     row.innerHTML = `
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="job-checkbox" data-job-id="${job.id}" onchange="updateDeleteButton()" style="cursor: pointer;">
+                        </td>
                         <td>${job.filename}</td>
                         <td>${job.model}</td>
                         <td>${statusBadge}</td>
@@ -712,7 +715,7 @@ async function loadJobList() {
                         detailsRow.id = `job-details-${job.id}`;
                         detailsRow.style.display = 'none';
                         detailsRow.innerHTML = `
-                            <td colspan="5" style="padding: 20px; background: #f9fafb;">
+                            <td colspan="6" style="padding: 20px; background: #f9fafb;">
                                 <div id="stems-${job.id}" style="display: flex; flex-direction: column; gap: 15px;">
                                     <p style="color: #667eea; font-weight: 600;">Loading stems...</p>
                                 </div>
@@ -732,11 +735,91 @@ async function loadJobList() {
                 const detailsRow = document.getElementById(`job-details-${jobId}`);
                 if (detailsRow) detailsRow.remove();
             });
+            
+            // Update delete button visibility
+            updateDeleteButton();
         }
     } catch (error) {
         console.error('Failed to load job list:', error);
     }
 }
+
+// Toggle select all checkboxes
+window.toggleSelectAll = function() {
+    const selectAllCheckbox = document.getElementById('select-all-jobs');
+    const checkboxes = document.querySelectorAll('.job-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    
+    updateDeleteButton();
+};
+
+// Update delete button visibility based on selection
+window.updateDeleteButton = function() {
+    const checkboxes = document.querySelectorAll('.job-checkbox');
+    const checkedBoxes = Array.from(checkboxes).filter(cb => cb.checked);
+    const deleteBtn = document.getElementById('delete-selected-btn');
+    const selectAllCheckbox = document.getElementById('select-all-jobs');
+    
+    if (checkedBoxes.length > 0) {
+        deleteBtn.style.display = 'inline-block';
+        deleteBtn.textContent = `Delete Selected (${checkedBoxes.length})`;
+    } else {
+        deleteBtn.style.display = 'none';
+    }
+    
+    // Update select all checkbox state
+    if (checkboxes.length > 0) {
+        selectAllCheckbox.checked = checkedBoxes.length === checkboxes.length;
+        selectAllCheckbox.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < checkboxes.length;
+    }
+};
+
+// Delete selected jobs
+window.deleteSelectedJobs = async function() {
+    const checkboxes = document.querySelectorAll('.job-checkbox:checked');
+    const jobIds = Array.from(checkboxes).map(cb => cb.getAttribute('data-job-id'));
+    
+    if (jobIds.length === 0) {
+        showNotification('No jobs selected', 'info');
+        return;
+    }
+    
+    const confirmMessage = `Are you sure you want to delete ${jobIds.length} job${jobIds.length > 1 ? 's' : ''}? This action cannot be undone.`;
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/jobs`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(jobIds)
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification(data.message, 'success');
+            
+            // Uncheck select all
+            document.getElementById('select-all-jobs').checked = false;
+            
+            // Reload job list
+            await loadJobList();
+        } else {
+            const error = await response.json();
+            showNotification(error.detail || 'Failed to delete jobs', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting jobs:', error);
+        showNotification('Error deleting jobs', 'error');
+    }
+};
 
 // Stem count selector event listener
 document.getElementById('stem-count').addEventListener('change', (e) => {
@@ -1001,9 +1084,9 @@ function updateJobInList(job) {
         statusBadge += ' <span style="animation: pulse 1.5s infinite;">⏳</span>';
     }
     
-    // Update only the cells that changed
-    existingRow.cells[2].innerHTML = statusBadge;
-    existingRow.cells[4].innerHTML = job.status.toUpperCase() === 'COMPLETED' ? 
+    // Update only the cells that changed (accounting for checkbox column)
+    existingRow.cells[3].innerHTML = statusBadge;
+    existingRow.cells[5].innerHTML = job.status.toUpperCase() === 'COMPLETED' ? 
         `<button onclick="showJobDetails('${job.id}')" class="btn-download">View/Play</button>
          <button onclick="downloadJob('${job.id}')" class="btn-download">Download</button>` : 
         `<button onclick="checkJobStatus('${job.id}')" class="btn-refresh">Refresh</button>`;
@@ -1018,7 +1101,7 @@ function updateJobInList(job) {
             detailsRow.id = `job-details-${job.id}`;
             detailsRow.style.display = 'none';
             detailsRow.innerHTML = `
-                <td colspan="5" style="padding: 20px; background: #f9fafb;">
+                <td colspan="6" style="padding: 20px; background: #f9fafb;">
                     <div id="stems-${job.id}" style="display: flex; flex-direction: column; gap: 15px;">
                         <p style="color: #667eea; font-weight: 600;">Loading stems...</p>
                     </div>
@@ -1082,7 +1165,7 @@ window.showJobDetails = async function(jobId) {
         newDetailsRow.id = `job-details-${jobId}`;
         newDetailsRow.style.display = 'table-row';
         newDetailsRow.innerHTML = `
-            <td colspan="5" style="padding: 20px; background: #f9fafb;">
+            <td colspan="6" style="padding: 20px; background: #f9fafb;">
                 <div id="stems-${jobId}" style="display: flex; flex-direction: column; gap: 15px;">
                     <p style="color: #667eea; font-weight: 600;">Loading stems...</p>
                 </div>
