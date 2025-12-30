@@ -25,13 +25,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/"]
@@ -44,9 +37,9 @@ services:
     image: postgres:16-alpine
     container_name: demucs-postgres
     environment:
-      - POSTGRES_USER=demucs
-      - POSTGRES_PASSWORD=demucs123
-      - POSTGRES_DB=demucs
+      - POSTGRES_USER=${POSTGRES_USER:-demucs}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-demucs123}
+      - POSTGRES_DB=${POSTGRES_DB:-demucs}
     volumes:
       - demucs-postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
