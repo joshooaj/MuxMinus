@@ -36,4 +36,4 @@ fi
 
 # Start the application
 echo -e "${GREEN}🎵 Starting API server on port 80...${NC}"
-exec uvicorn main:app --host 0.0.0.0 --port 80
+exec uvicorn main:app --host 0.0.0.0 --port 80 --proxy-headers
