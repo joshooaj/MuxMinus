@@ -2,8 +2,8 @@ services:
   backend:
     build: ./backend
     container_name: demucs-backend
-    ports:
-      - "8000:80"
+    # ports:
+    #   - "8000:80"
     volumes:
       - demucs-completed:/app/completed
       - demucs-uploads:/app/uploads
@@ -14,9 +14,9 @@ services:
       - PYTHONUNBUFFERED=1
       - PIP_CACHE_DIR=/app/pip-cache
       # Uncomment to use CPU-only mode (smaller download, no GPU required):
-      - USE_CPU=1
+      # - USE_CPU=1
       - DATABASE_URL=postgresql://demucs:demucs123@postgres:5432/demucs
-      - SECRET_KEY=your-secret-key-change-in-production
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       # Square Payment Configuration (get from Square Developer Dashboard)
       - SQUARE_ACCESS_TOKEN=${SQUARE_ACCESS_TOKEN:-}
       - SQUARE_APPLICATION_ID=${SQUARE_APPLICATION_ID:-}
