@@ -91,6 +91,13 @@ if FRONTEND_DIR.exists():
 # Credit cost per job
 CREDIT_COST_PER_JOB = 1.0
 
+# Job Queue Configuration
+MAX_CONCURRENT_JOBS = int(os.getenv("MAX_CONCURRENT_JOBS", "2"))
+job_queue = asyncio.Queue()
+processing_semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
+queue_processor_task = None
+active_jobs = set()  # Track currently processing jobs
+
 # Square API Configuration
 SQUARE_ACCESS_TOKEN = os.getenv("SQUARE_ACCESS_TOKEN", "")
 SQUARE_ENVIRONMENT = os.getenv("SQUARE_ENVIRONMENT", "sandbox")  # 'sandbox' or 'production'
@@ -324,6 +331,141 @@ async def process_audio_file(job_id: str, input_path: Path, db_session_maker):
             logger.error(f"Error during cleanup: {cleanup_error}")
     finally:
         db.close()
+
+
+async def queue_processor():
+    """
+    Background task that processes jobs from the queue with concurrency control.
+    """
+    logger.info(f"Job queue processor started (max concurrent: {MAX_CONCURRENT_JOBS})")
+    
+    async def process_with_tracking(job_id, input_path, db_session_maker):
+        """Wrapper to track job completion and release semaphore."""
+        try:
+            active_jobs.add(job_id)
+            logger.info(f"Job {job_id} started (active: {len(active_jobs)}, queued: {job_queue.qsize()})")
+            await process_audio_file(job_id, input_path, db_session_maker)
+        finally:
+            active_jobs.discard(job_id)
+            logger.info(f"Job {job_id} completed (active: {len(active_jobs)}, queued: {job_queue.qsize()})")
+    
+    from database import SessionLocal
+    
+    logger.info(f"Queue processor loop starting - BUILD TIMESTAMP: 2025-12-30 v2")
+    
+    while True:
+        job_id = None
+        input_path = None
+        semaphore_acquired = False
+        try:
+            # Get next job from queue (blocks until job available)
+            queue_item = await job_queue.get()
+            logger.info(f"DEQUEUED RAW: {queue_item!r} (type: {type(queue_item)})")
+            
+            # Validate queue item
+            if not isinstance(queue_item, tuple) or len(queue_item) != 2:
+                logger.error(f"Invalid queue item format: {queue_item}")
+                job_queue.task_done()
+                continue
+            
+            job_id, input_path_str = queue_item
+            logger.info(f"UNPACKED: job_id={job_id!r}, input_path_str={input_path_str!r}")
+            
+            if not job_id:
+                logger.error(f"Invalid job_id in queue: {queue_item}")
+                job_queue.task_done()
+                continue
+            
+            input_path = Path(input_path_str)
+            logger.debug(f"Dequeued job {job_id}: path={input_path}")
+            
+            # Wait for available slot (respects MAX_CONCURRENT_JOBS)
+            await processing_semaphore.acquire()
+            semaphore_acquired = True
+            
+            # Start processing in background and release semaphore when done
+            # Use default arguments to capture current values (avoid closure issues)
+            async def process_and_release(job_id=job_id, input_path=input_path):
+                try:
+                    await process_with_tracking(job_id, input_path, SessionLocal)
+                finally:
+                    processing_semaphore.release()
+                    job_queue.task_done()
+            
+            asyncio.create_task(process_and_release())
+            
+        except Exception as e:
+            logger.error(f"Error in queue processor: {e}", exc_info=True)
+            # Clean up if we got an error after acquiring resources
+            if semaphore_acquired:
+                processing_semaphore.release()
+            if job_id is not None:
+                job_queue.task_done()
+            await asyncio.sleep(1)  # Prevent tight loop on repeated errors
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the job queue processor on app startup."""
+    global queue_processor_task
+    
+    # Recover orphaned jobs (stuck in PENDING state)
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        logger.info("Checking for orphaned jobs...")
+        orphaned_jobs = db.query(Job).filter(Job.status == JobStatus.PENDING).all()
+        logger.info(f"Found {len(orphaned_jobs)} orphaned job(s)")
+        
+        if orphaned_jobs:
+            for job in orphaned_jobs:
+                logger.info(f"Processing orphaned job {job.id} (user: {job.user_id}, filename: {job.filename})")
+                
+                # Find the upload file
+                upload_path = None
+                for ext in ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']:
+                    potential_path = UPLOAD_DIR / f"{job.id}{ext}"
+                    logger.debug(f"Checking for file: {potential_path}")
+                    if potential_path.exists():
+                        upload_path = potential_path
+                        logger.info(f"Found upload file: {upload_path}")
+                        break
+                
+                if upload_path:
+                    await job_queue.put((job.id, str(upload_path)))
+                    logger.info(f"Re-queued orphaned job {job.id} (queue size: {job_queue.qsize()})")
+                else:
+                    # File is missing, mark job as failed
+                    logger.warning(f"Upload file not found for job {job.id}, marking as failed")
+                    job.status = JobStatus.FAILED
+                    job.error_message = "Upload file not found during recovery"
+                    job.completed_at = datetime.utcnow()
+                    db.commit()
+                    logger.info(f"Orphaned job {job.id} marked as failed")
+        else:
+            logger.info("No orphaned jobs found")
+            
+    except Exception as e:
+        logger.error(f"Error recovering orphaned jobs: {e}", exc_info=True)
+    finally:
+        db.close()
+    
+    queue_processor_task = asyncio.create_task(queue_processor())
+    logger.info("Job queue processor started")
+    logger.info("Application startup complete")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on app shutdown."""
+    global queue_processor_task
+    if queue_processor_task:
+        queue_processor_task.cancel()
+        try:
+            await queue_processor_task
+        except asyncio.CancelledError:
+            pass
+    logger.info("Application shutdown complete")
 
 
 # ============================================================================
@@ -742,9 +884,9 @@ async def upload_audio(
     
     logger.info(f"Job {job_id} created for user {current_user.id}: model={model}, stem_count={stem_count}, two_stem_type={two_stem_type}")
     
-    # Start background processing
-    from database import SessionLocal
-    background_tasks.add_task(process_audio_file, job_id, upload_path, SessionLocal)
+    # Add job to queue instead of processing immediately
+    await job_queue.put((job_id, str(upload_path)))
+    logger.info(f"Job {job_id} queued (queue size: {job_queue.qsize()})")
     
     return JobResponse(
         id=job.id,
