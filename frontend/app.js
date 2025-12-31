@@ -42,7 +42,7 @@ function showPage(pageName) {
         } else if (pageName === 'profile') {
             path = '/profile';
         } else if (pageName === 'api') {
-            path = '/api';
+            path = '/api-dashboard';
         } else if (pageName === 'api-docs') {
             path = '/api-docs';
         } else if (pageName === 'admin') {
@@ -99,6 +99,10 @@ window.addEventListener('popstate', (event) => {
         } else if (path === '/admin') {
             targetPage = currentToken ? 'admin' : 'landing';
             if (currentToken) loadAdminPage();
+        } else if (path === '/api-dashboard') {
+            targetPage = currentToken ? 'api' : 'landing';
+        } else if (path === '/api-docs') {
+            targetPage = currentToken ? 'api-docs' : 'landing';
         } else {
             // Root or unknown path
             targetPage = currentToken ? 'dashboard' : 'landing';
@@ -1819,7 +1823,7 @@ document.getElementById('nav-admin-logout').addEventListener('click', logout);
         targetPage = 'dashboard';
     } else if (path === '/admin') {
         targetPage = 'admin';
-    } else if (path === '/api') {
+    } else if (path === '/api-dashboard') {
         targetPage = 'api';
     } else if (path === '/api-docs') {
         targetPage = 'api-docs';
