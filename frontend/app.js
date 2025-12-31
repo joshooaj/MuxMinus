@@ -390,16 +390,47 @@ window.deleteApiKey = async function() {
 // Copy API Key
 window.copyApiKey = async function() {
     const apiKeyInput = document.getElementById('api-key-display');
+    const copyBtn = document.getElementById('copy-btn');
+    const copyIcon = document.getElementById('copy-icon');
+    const copyText = document.getElementById('copy-text');
     const apiKey = apiKeyInput.value;
     
     try {
         await navigator.clipboard.writeText(apiKey);
+        
+        // Visual feedback
+        copyIcon.textContent = '✅';
+        copyText.textContent = 'Copied!';
+        copyBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        apiKeyInput.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+        
         showNotification('API key copied to clipboard!', 'success');
+        
+        // Reset button after 2 seconds
+        setTimeout(() => {
+            copyIcon.textContent = '📋';
+            copyText.textContent = 'Copy';
+            copyBtn.style.background = '';
+            apiKeyInput.style.borderColor = '';
+        }, 2000);
     } catch (error) {
         // Fallback for older browsers
         apiKeyInput.select();
         document.execCommand('copy');
+        
+        // Visual feedback
+        copyIcon.textContent = '✅';
+        copyText.textContent = 'Copied!';
+        copyBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        
         showNotification('API key copied to clipboard!', 'success');
+        
+        // Reset button after 2 seconds
+        setTimeout(() => {
+            copyIcon.textContent = '📋';
+            copyText.textContent = 'Copy';
+            copyBtn.style.background = '';
+        }, 2000);
     }
 };
 

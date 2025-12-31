@@ -441,32 +441,52 @@
             <p class="subtitle">Use your API key to access Mux Minus programmatically</p>
 
             <!-- API Key Display/Generate -->
-            <div id="api-key-section" style="padding: 20px; background: rgba(255,255,255,0.05); border-radius: 8px; margin: 20px 0;">
+            <div id="api-key-section" style="margin: 30px 0;">
                 <div id="no-api-key" style="display: none;">
-                    <p style="color: #999; margin-bottom: 15px;">No API key has been generated yet.</p>
-                    <button onclick="generateApiKey()" class="btn">Generate API Key</button>
+                    <div style="padding: 40px; background: rgba(255,255,255,0.05); border-radius: 12px; border: 2px dashed rgba(255,255,255,0.2); text-align: center;">
+                        <div style="font-size: 3em; margin-bottom: 15px; opacity: 0.5;">🔑</div>
+                        <h4 style="margin-bottom: 10px; color: #fff;">No API Key Generated</h4>
+                        <p style="color: #999; margin-bottom: 25px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                            Generate an API key to access Mux Minus through REST API. Your key will provide full access to your account programmatically.
+                        </p>
+                        <button onclick="generateApiKey()" class="btn" style="padding: 12px 32px; font-size: 1.05em;">
+                            <span style="font-size: 1.2em; margin-right: 8px;">✨</span> Generate API Key
+                        </button>
+                    </div>
                 </div>
                 
                 <div id="has-api-key" style="display: none;">
-                    <h4>Your API Key</h4>
-                    <p style="color: #999; font-size: 0.9em; margin-bottom: 10px;">Keep this key secure! It provides full access to your account via the API.</p>
-                    <div style="display: flex; gap: 10px; align-items: center; margin: 15px 0;">
-                        <input type="text" id="api-key-display" readonly 
-                               style="flex: 1; font-family: 'Courier New', monospace; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: #fff;">
-                        <button onclick="copyApiKey()" class="btn" style="white-space: nowrap;">
-                            📋 Copy
+                    <!-- API Key Display -->
+                    <div style="margin-bottom: 24px;">
+                        <label style="display: block; color: #64748b; font-size: 0.75em; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Your API Key
+                        </label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="api-key-display" readonly 
+                                   style="flex: 1; min-width: 0; font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.9em; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #334155;">
+                            <button onclick="copyApiKey()" id="copy-btn" 
+                                    style="padding: 12px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600; font-size: 0.9em; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 6px;">
+                                <span id="copy-icon">📋</span>
+                                <span id="copy-text">Copy</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                        <button onclick="regenerateApiKey()" 
+                                style="flex: 1; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #475569; cursor: pointer; font-weight: 500; font-size: 0.9em; transition: all 0.2s;">
+                            🔄 Regenerate
+                        </button>
+                        <button onclick="deleteApiKey()" 
+                                style="flex: 1; padding: 12px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; cursor: pointer; font-weight: 500; font-size: 0.9em; transition: all 0.2s;">
+                            🗑️ Delete
                         </button>
                     </div>
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
-                        <button onclick="regenerateApiKey()" class="btn" style="background: #f59e0b;">
-                            🔄 Regenerate Key
-                        </button>
-                        <button onclick="deleteApiKey()" class="btn" style="background: #ef4444;">
-                            🗑️ Delete Key
-                        </button>
-                    </div>
-                    <p style="color: #f59e0b; font-size: 0.85em; margin-top: 10px;">
-                        ⚠️ Regenerating will invalidate your old key immediately
+                    
+                    <!-- Info Notice -->
+                    <p style="color: #94a3b8; margin: 0; font-size: 0.85em; line-height: 1.5;">
+                        ⚠️ Keep your API key secure. Never share it publicly or commit to version control.
                     </p>
                 </div>
             </div>
@@ -477,17 +497,17 @@
                 <p style="color: #999; margin-bottom: 15px;">
                     Include your API key in the Authorization header of all requests:
                 </p>
-                <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">Authorization: Bearer YOUR_API_KEY</pre>
+                <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">Authorization: Bearer YOUR_API_KEY</pre>
                 
                 <h4 style="margin-top: 25px;">Example: Upload a file</h4>
-                <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl -X POST https://muxminus.com/upload \\
+                <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl -X POST https://muxminus.com/upload \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -F "file=@song.mp3" \\
   -F "model=htdemucs" \\
   -F "stem_count=4"</pre>
 
                 <h4 style="margin-top: 25px;">Example: Check job status</h4>
-                <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl https://muxminus.com/jobs/YOUR_JOB_ID \\
+                <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl https://muxminus.com/jobs/YOUR_JOB_ID \\
   -H "Authorization: Bearer YOUR_API_KEY"</pre>
 
                 <button onclick="showPage('api-docs')" class="btn" style="margin-top: 20px;">
@@ -769,7 +789,7 @@
             <div style="margin: 30px 0;">
                 <h4 style="color: #667eea;">Authentication</h4>
                 <p style="color: #999;">All API requests require authentication using your API key in the Authorization header:</p>
-                <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">Authorization: Bearer YOUR_API_KEY</pre>
+                <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">Authorization: Bearer YOUR_API_KEY</pre>
                 <button onclick="showPage('api')" class="btn" style="margin-top: 10px; padding: 8px 16px; font-size: 0.9em;">
                     🔑 Manage API Keys
                 </button>
@@ -778,7 +798,7 @@
             <!-- Base URL -->
             <div style="margin: 30px 0;">
                 <h4 style="color: #667eea;">Base URL</h4>
-                <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">https://muxminus.com</pre>
+                <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">https://muxminus.com</pre>
             </div>
 
             <!-- Endpoints -->
@@ -800,14 +820,14 @@
                     </table>
 
                     <h5>Example Request</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl -X POST https://muxminus.com/upload \
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl -X POST https://muxminus.com/upload \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -F "file=@song.mp3" \
   -F "model=htdemucs" \
   -F "stem_count=4"</pre>
 
                     <h5>Response (201 Created)</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">{
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">{
   "id": "abc-123-def",
   "filename": "song.mp3",
   "model": "htdemucs",
@@ -823,11 +843,11 @@
                     <p style="color: #999; margin: 10px 0;">List all jobs for your account (newest first, limited to 50).</p>
                     
                     <h5>Example Request</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl https://muxminus.com/jobs \
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl https://muxminus.com/jobs \
   -H "Authorization: Bearer YOUR_API_KEY"</pre>
 
                     <h5>Response (200 OK)</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">{
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">{
   "jobs": [
     {
       "id": "abc-123-def",
@@ -847,11 +867,11 @@
                     <p style="color: #999; margin: 10px 0;">Get details of a specific job.</p>
                     
                     <h5>Example Request</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl https://muxminus.com/jobs/abc-123-def \
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl https://muxminus.com/jobs/abc-123-def \
   -H "Authorization: Bearer YOUR_API_KEY"</pre>
 
                     <h5>Response (200 OK)</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">{
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">{
   "id": "abc-123-def",
   "filename": "song.mp3",
   "model": "htdemucs",
@@ -867,11 +887,11 @@
                     <p style="color: #999; margin: 10px 0;">List available stems for a completed job.</p>
                     
                     <h5>Example Request</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl https://muxminus.com/jobs/abc-123-def/stems \
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl https://muxminus.com/jobs/abc-123-def/stems \
   -H "Authorization: Bearer YOUR_API_KEY"</pre>
 
                     <h5>Response (200 OK)</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">{
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">{
   "stems": ["bass.wav", "drums.wav", "other.wav", "vocals.wav"]
 }</pre>
                 </div>
@@ -882,7 +902,7 @@
                     <p style="color: #999; margin: 10px 0;">Download an individual stem file.</p>
                     
                     <h5>Example Request</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl https://muxminus.com/download/abc-123-def/vocals.wav \
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl https://muxminus.com/download/abc-123-def/vocals.wav \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -o vocals.wav</pre>
                 </div>
@@ -893,7 +913,7 @@
                     <p style="color: #999; margin: 10px 0;">Download all stems as a ZIP file.</p>
                     
                     <h5>Example Request</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl https://muxminus.com/download/abc-123-def \
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl https://muxminus.com/download/abc-123-def \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -o stems.zip</pre>
                 </div>
@@ -904,13 +924,13 @@
                     <p style="color: #999; margin: 10px 0;">Delete one or more jobs and their files.</p>
                     
                     <h5>Example Request</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">curl -X DELETE https://muxminus.com/jobs \
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">curl -X DELETE https://muxminus.com/jobs \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '["abc-123-def", "xyz-456-ghi"]'</pre>
 
                     <h5>Response (200 OK)</h5>
-                    <pre style="background: rgba(0,0,0,0.4); padding: 15px; border-radius: 4px; overflow-x: auto; color: #a5f3fc; font-size: 0.9em;">{
+                    <pre style="background: #1e293b; padding: 15px; border-radius: 6px; overflow-x: auto; color: #e2e8f0; font-size: 0.9em;">{
   "deleted": 2,
   "errors": [],
   "message": "Successfully deleted 2 job(s)"
