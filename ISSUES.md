@@ -2,10 +2,6 @@
 
 ## Open Issues
 
-### API Support
-
-Allow users to generate an API key and use the service through a REST api.
-
 ### Add SSO
 
 The user should be able to register or login using single sign-on with at least Google, GitHub, and Facebook as identity providers.
@@ -99,3 +95,17 @@ Build an admin page where I can see all the users, how many credits they have re
 ### Enable users to delete jobs
 
 Add a "select all" checkbox at the left side of the table header in the jobs table, and add a checkbox to the left of each job. Allow the user to select one or all jobs and while there is at least one job selected, allow the user to click a "Delete" button above the table to the right.
+
+### REST API Support
+
+Users can now generate an API key and use the service through a REST API. The API documentation is built into the web interface, accessible via the "API" navigation button. Users can generate, regenerate, or delete their API key from the API management page. All core endpoints (upload, jobs, downloads) support both JWT and API key authentication via the Authorization header.
+
+**Key Features:**
+
+- Generate/regenerate/delete API keys
+- Built-in API documentation with examples
+- Support for multipart file uploads
+- Job management via API
+- Individual or batch stem downloads
+- Full authentication with Bearer token format
+

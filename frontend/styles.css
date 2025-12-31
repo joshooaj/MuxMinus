@@ -1026,3 +1026,59 @@ tbody tr:hover {
         display: none;
     }
 }
+/* API Documentation Styles */
+.api-endpoint {
+    padding: 20px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    border-left: 4px solid var(--primary);
+}
+
+.api-endpoint h4 {
+    color: #fff;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.api-endpoint h5 {
+    color: #a5f3fc;
+    margin: 20px 0 10px 0;
+    font-size: 0.95em;
+}
+
+.api-method {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+}
+
+.api-method.get {
+    background: #10b981;
+    color: white;
+}
+
+.api-method.post {
+    background: #3b82f6;
+    color: white;
+}
+
+.api-method.delete {
+    background: #ef4444;
+    color: white;
+}
+
+.api-endpoint code {
+    background: rgba(0,0,0,0.3);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.api-endpoint pre {
+    margin: 10px 0;
+}

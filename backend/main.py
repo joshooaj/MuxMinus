@@ -40,7 +40,9 @@ from auth import (
     get_password_hash,
     verify_password,
     create_access_token,
-    get_current_user
+    get_current_user,
+    get_current_user_flexible,
+    generate_api_key
 )
 
 # Configure logging
@@ -686,6 +688,64 @@ async def delete_account(
 
 
 # ============================================================================
+# API Key Management
+# ============================================================================
+
+@app.get("/api-key")
+async def get_api_key(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get current API key (if one exists)."""
+    if not current_user.api_key:
+        return {"api_key": None, "message": "No API key generated yet"}
+    
+    return {"api_key": current_user.api_key}
+
+
+@app.post("/api-key/generate")
+async def generate_user_api_key(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Generate a new API key for the user."""
+    if current_user.api_key:
+        raise HTTPException(status_code=400, detail="API key already exists. Use regenerate endpoint to create a new one.")
+    
+    api_key = generate_api_key()
+    current_user.api_key = api_key
+    db.commit()
+    
+    logger.info(f"API key generated for user {current_user.id}")
+    
+    return {"api_key": api_key, "message": "API key generated successfully"}
+
+
+@app.post("/api-key/regenerate")
+async def regenerate_api_key(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Regenerate API key (invalidates the old one)."""
+    api_key = generate_api_key()
+    old_key_existed = current_user.api_key is not None
+    current_user.api_key = api_key
+    db.commit()
+    
+    logger.info(f"API key regenerated for user {current_user.id}")
+    
+    return {
+        "api_key": api_key,
+        "message": "API key regenerated successfully" if old_key_existed else "API key generated successfully"
+    }
+
+
+@app.delete("/api-key")
+async def delete_api_key(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete the current API key."""
+    if not current_user.api_key:
+        raise HTTPException(status_code=404, detail="No API key to delete")
+    
+    current_user.api_key = None
+    db.commit()
+    
+    logger.info(f"API key deleted for user {current_user.id}")
+    
+    return {"message": "API key deleted successfully"}
+
+
+# ============================================================================
 # Credit Management
 # ============================================================================
 
@@ -809,7 +869,7 @@ async def upload_audio(
     model: str = Form("htdemucs"),
     stem_count: int = Form(4),
     two_stem_type: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """
@@ -907,7 +967,7 @@ async def upload_audio(
 @app.get("/status/{job_id}", response_model=JobResponse)
 async def get_job_status(
     job_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """Get the status of a processing job."""
@@ -935,7 +995,7 @@ async def get_job_status(
 @app.get("/download/{job_id}")
 async def download_result(
     job_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """Download the processed audio tracks as a ZIP file."""
@@ -963,7 +1023,7 @@ async def download_result(
 @app.get("/stems/{job_id}")
 async def get_stems_list(
     job_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """Get list of available stems for a completed job."""
@@ -1001,7 +1061,7 @@ async def get_stems_list(
 async def stream_stem(
     job_id: str,
     stem_name: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """Stream an individual stem audio file."""
@@ -1055,7 +1115,7 @@ async def stream_stem(
 @app.delete("/job/{job_id}")
 async def delete_job(
     job_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """Delete a job and its associated files."""
@@ -1079,7 +1139,7 @@ async def delete_job(
 
 @app.get("/jobs")
 async def list_jobs(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """List all jobs for the current user."""
@@ -1112,7 +1172,7 @@ async def list_jobs(
 @app.get("/jobs/{job_id}")
 async def get_job(
     job_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """Get a specific job by ID."""
@@ -1141,7 +1201,7 @@ async def get_job(
 @app.delete("/jobs")
 async def delete_jobs(
     job_ids: list[str],
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """Delete multiple jobs by ID."""

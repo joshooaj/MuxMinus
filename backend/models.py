@@ -25,6 +25,7 @@ class User(Base):
     credits = Column(Float, default=0.0, nullable=False)
     is_admin = Column(Integer, default=0, nullable=False)  # 0 = regular user, 1 = admin
     active = Column(Integer, default=1, nullable=False)  # 0 = disabled, 1 = active
+    api_key = Column(String, unique=True, index=True, nullable=True)  # API key for REST API access
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

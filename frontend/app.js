@@ -17,6 +17,8 @@ const pages = {
     dashboard: document.getElementById('dashboard-page'),
     purchase: document.getElementById('purchase-page'),
     profile: document.getElementById('profile-page'),
+    api: document.getElementById('api-page'),
+    'api-docs': document.getElementById('api-docs-page'),
     admin: document.getElementById('admin-page')
 };
 
@@ -39,6 +41,10 @@ function showPage(pageName) {
             path = '/purchase';
         } else if (pageName === 'profile') {
             path = '/profile';
+        } else if (pageName === 'api') {
+            path = '/api';
+        } else if (pageName === 'api-docs') {
+            path = '/api-docs';
         } else if (pageName === 'admin') {
             path = '/admin';
         }
@@ -258,6 +264,144 @@ window.goHome = function() {
 async function loadDashboard() {
     await loadJobList();
 }
+
+// ============================================================================
+// API Key Management
+// ============================================================================
+
+// Load API Page
+async function loadApiPage() {
+    if (!currentUser) return;
+    
+    // Update credits display
+    document.getElementById('header-credits-api').textContent = currentUser.credits.toFixed(1);
+    
+    // Load API key status
+    try {
+        const response = await fetch(`${API_URL}/api-key`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.api_key) {
+            document.getElementById('no-api-key').style.display = 'none';
+            document.getElementById('has-api-key').style.display = 'block';
+            document.getElementById('api-key-display').value = data.api_key;
+        } else {
+            document.getElementById('no-api-key').style.display = 'block';
+            document.getElementById('has-api-key').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error loading API key:', error);
+        showNotification('Failed to load API key', 'error');
+    }
+}
+
+// Generate API Key
+window.generateApiKey = async function() {
+    try {
+        const response = await fetch(`${API_URL}/api-key/generate`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to generate API key');
+        }
+        
+        document.getElementById('no-api-key').style.display = 'none';
+        document.getElementById('has-api-key').style.display = 'block';
+        document.getElementById('api-key-display').value = data.api_key;
+        
+        showNotification('API key generated successfully!', 'success');
+    } catch (error) {
+        console.error('Error generating API key:', error);
+        showNotification(error.message, 'error');
+    }
+};
+
+// Regenerate API Key
+window.regenerateApiKey = async function() {
+    if (!confirm('⚠️ This will invalidate your old API key immediately. Any applications using the old key will stop working. Continue?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/api-key/regenerate`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to regenerate API key');
+        }
+        
+        document.getElementById('api-key-display').value = data.api_key;
+        
+        showNotification('API key regenerated successfully!', 'success');
+    } catch (error) {
+        console.error('Error regenerating API key:', error);
+        showNotification(error.message, 'error');
+    }
+};
+
+// Delete API Key
+window.deleteApiKey = async function() {
+    if (!confirm('⚠️ This will permanently delete your API key. Any applications using this key will stop working. Continue?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/api-key`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to delete API key');
+        }
+        
+        document.getElementById('no-api-key').style.display = 'block';
+        document.getElementById('has-api-key').style.display = 'none';
+        document.getElementById('api-key-display').value = '';
+        
+        showNotification('API key deleted successfully', 'success');
+    } catch (error) {
+        console.error('Error deleting API key:', error);
+        showNotification(error.message, 'error');
+    }
+};
+
+// Copy API Key
+window.copyApiKey = async function() {
+    const apiKeyInput = document.getElementById('api-key-display');
+    const apiKey = apiKeyInput.value;
+    
+    try {
+        await navigator.clipboard.writeText(apiKey);
+        showNotification('API key copied to clipboard!', 'success');
+    } catch (error) {
+        // Fallback for older browsers
+        apiKeyInput.select();
+        document.execCommand('copy');
+        showNotification('API key copied to clipboard!', 'success');
+    }
+};
 
 // Load Purchase Page
 async function loadPurchasePage() {
@@ -1519,6 +1663,12 @@ document.getElementById('nav-profile').addEventListener('click', () => {
 
 document.getElementById('nav-logout').addEventListener('click', logout);
 
+// API page nav buttons
+document.getElementById('nav-api').addEventListener('click', () => {
+    showPage('api');
+    loadApiPage();
+});
+
 // Profile page nav buttons
 document.getElementById('nav-dashboard-profile').addEventListener('click', () => {
     showPage('dashboard');
@@ -1535,7 +1685,58 @@ document.getElementById('nav-profile-profile').addEventListener('click', () => {
     loadProfilePage();
 });
 
+document.getElementById('nav-api-profile').addEventListener('click', () => {
+    showPage('api');
+    loadApiPage();
+});
+
 document.getElementById('nav-logout-profile').addEventListener('click', logout);
+
+// API page nav buttons
+document.getElementById('nav-dashboard-api').addEventListener('click', () => {
+    showPage('dashboard');
+    loadDashboard();
+});
+
+document.getElementById('nav-purchase-api').addEventListener('click', () => {
+    showPage('purchase');
+    loadPurchasePage();
+});
+
+document.getElementById('nav-profile-api').addEventListener('click', () => {
+    showPage('profile');
+    loadProfilePage();
+});
+
+document.getElementById('nav-api-api').addEventListener('click', () => {
+    showPage('api');
+    loadApiPage();
+});
+
+document.getElementById('nav-logout-api').addEventListener('click', logout);
+
+// API docs page nav buttons
+document.getElementById('nav-dashboard-api-docs').addEventListener('click', () => {
+    showPage('dashboard');
+    loadDashboard();
+});
+
+document.getElementById('nav-purchase-api-docs').addEventListener('click', () => {
+    showPage('purchase');
+    loadPurchasePage();
+});
+
+document.getElementById('nav-profile-api-docs').addEventListener('click', () => {
+    showPage('profile');
+    loadProfilePage();
+});
+
+document.getElementById('nav-api-api-docs').addEventListener('click', () => {
+    showPage('api');
+    loadApiPage();
+});
+
+document.getElementById('nav-logout-api-docs').addEventListener('click', logout);
 
 document.getElementById('show-register').addEventListener('click', (e) => {
     e.preventDefault();
@@ -1587,6 +1788,10 @@ document.getElementById('nav-admin-logout').addEventListener('click', logout);
         targetPage = 'dashboard';
     } else if (path === '/admin') {
         targetPage = 'admin';
+    } else if (path === '/api') {
+        targetPage = 'api';
+    } else if (path === '/api-docs') {
+        targetPage = 'api-docs';
     } else if (path === '/register') {
         targetPage = 'register';
     } else if (path === '/login') {
@@ -1601,6 +1806,12 @@ document.getElementById('nav-admin-logout').addEventListener('click', logout);
             await loadDashboard();
         } else if (targetPage === 'admin') {
             loadAdminPage();
+        } else if (targetPage === 'api') {
+            await loadApiPage();
+        } else if (targetPage === 'api-docs') {
+            if (currentUser) {
+                document.getElementById('header-credits-api-docs').textContent = currentUser.credits.toFixed(1);
+            }
         }
     } else {
         // Non-authenticated users see landing page by default
