@@ -132,7 +132,11 @@
 
 {% block extra_js %}
 <!-- Square Web Payments SDK -->
-<script src="https://{{ square_environment }}.web.squarecdn.com/v1/square.js"></script>
+{% if square_environment == 'sandbox' %}
+<script src="https://sandbox.web.squarecdn.com/v1/square.js"></script>
+{% else %}
+<script src="https://web.squarecdn.com/v1/square.js"></script>
+{% endif %}
 
 <script>
 const appId = '{{ square_app_id }}';
