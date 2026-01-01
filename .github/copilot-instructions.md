@@ -24,89 +24,180 @@ three free credits allowing them to process three music files. If they like the
 tool, they can purchase additional credits in packs of 5, 25, or 100 at a price
 of $1.00, $4.00, and $15.00 respectively.
 
+## Current Implementation Status
+
+### Completed Features
+- Landing page with feature highlights, pricing, and call-to-action
+- User registration and authentication (email/password)
+- User dashboard showing job history and credit balance
+- Job creation with file upload, model selection, and stem configuration
+- Job detail page with waveform audio players (WaveSurfer.js)
+- Demo page showcasing pre-processed sample audio with interactive waveform players
+- Credit system with Square payment integration
+- Profile management (change password, delete account)
+- PWA support (manifest.json, service worker, installable on mobile)
+- Social card / Open Graph meta tags
+- Favicon and PWA icons
+
+### Not Yet Implemented
+- REST API for programmatic access
+- Social sign-on (GitHub, Facebook, etc.)
+- API token generation in user profile
+- Automatic file cleanup after 24 hours (cron job or scheduled task)
+
 ## Architecture
 
-### Frontend
+### Frontend (Django App)
 
-The project will use Django for the front end, the REST api, user management, and
-administration. The frontend should look clean and modern, it should be accessible,
-and engaging. It should follow Django project development patterns as much as
-possible.
+Located in `app/` directory:
 
-### Backend
+- **Framework**: Django 5.x with server-side templates
+- **Static Files**: `app/static/` - CSS, JavaScript, images, PWA assets
+- **Templates**: `app/templates/` - Jinja2-style Django templates
+- **Styling**: Custom CSS with CSS variables for theming (`static/css/style.css`)
+- **Audio Playback**: WaveSurfer.js for waveform visualization and playback
 
-The backend service will be accessible only internally by the frontend service.
-It will use FastAPI to present a simple REST API the frontend can use to interact
-with the demucs CLI.
+Key files:
+- `app/core/views.py` - All view functions (landing, auth, jobs, payments)
+- `app/core/models.py` - User, Job, CreditPackage models
+- `app/core/forms.py` - Django forms for registration, login, job creation
+- `app/core/payments.py` - Square payment integration
+- `app/core/backend_client.py` - HTTP client for FastAPI backend
+- `app/core/urls.py` - URL routing
+- `app/muxminus/settings.py` - Django settings (uses environment variables)
 
-The backend should allow a configurable number of concurrent jobs so that users
-cannot accidentally, or maliciously DDOS the service and we maintain fairness.
+### Backend (FastAPI Service)
 
-### Data Flow
+Located in `backend/` directory:
 
-Users will be allowed to upload one or more files at a time through the frontend
-web interface or REST API. The frontend will save those files to a shared volume
-and send the backend a job which includes the path to the uploaded file, the
-desired AI model name, and if performing a two-stem job, the name of the stem
-to isolate: vocals, bass, drums. When demucs has completed the job, the files
-are moved to a folder on the same shared volume. Users will then be able to play
-the individual stems from the web interface, download them, or download a zip
-file containing all stems from that job.
+- **Framework**: FastAPI
+- **Purpose**: Internal service that wraps the demucs CLI
+- **Job Queue**: Manages concurrent job processing with configurable limits
 
-### Deployment
+Key files:
+- `backend/app/main.py` - FastAPI application and endpoints
+- `backend/app/separator.py` - Demucs CLI wrapper
+- `backend/app/queue.py` - Job queue management
+- `backend/app/models.py` - Pydantic models for API requests/responses
+- `backend/app/config.py` - Configuration settings
 
-This project will run in a docker-compose project behind a reverse proxy. The
-project will have a container for the backend service, frontend service, and a
-database container using postgres.
+### Database
+
+- **Production**: PostgreSQL (configured via DATABASE_URL environment variable)
+- **Development**: SQLite (`app/db.sqlite3`)
+
+### Key Models
+
+```python
+# User model (extends AbstractUser)
+- email (unique, used for login)
+- credits (integer, default 3)
+
+# Job model
+- id (UUID primary key)
+- user (ForeignKey to User)
+- original_filename
+- model_name (htdemucs, htdemucs_6s)
+- stem_type (for 2-stem jobs: vocals, drums, bass)
+- output_format (mp3, wav)
+- status (queued, processing, completed, failed)
+- created_at, completed_at
+- error_message (if failed)
+
+# CreditPackage model
+- name, credits, price_cents
+- Pre-seeded via migration: Starter (5/$1), Popular (25/$4), Pro (100/$15)
+```
+
+## Environment Variables
+
+The Django app uses these environment variables (see `docker-compose.yml`):
+
+```
+DEBUG=false                          # Set to false in production
+SECRET_KEY=<random-string>           # Django secret key
+ALLOWED_HOSTS=muxminus.com           # Comma-separated list
+CSRF_TRUSTED_ORIGINS=https://muxminus.com  # Required behind reverse proxy
+DATABASE_URL=postgres://user:pass@host:port/db
+BACKEND_URL=http://backend:8000      # Internal FastAPI service URL
+SQUARE_ACCESS_TOKEN=<token>          # Square API access token
+SQUARE_LOCATION_ID=<location>        # Square location ID
+SQUARE_APP_ID=<app-id>               # Square application ID
+SQUARE_ENVIRONMENT=sandbox|production  # Square environment
+```
+
+## Deployment
+
+### Docker Compose
+
+The project uses docker-compose with three services:
+
+1. **app** - Django frontend (port 8000)
+2. **backend** - FastAPI service (port 8000, internal only)
+3. **db** - PostgreSQL database
+
+Shared volumes:
+- `uploads` - User uploaded files
+- `outputs` - Demucs output stems
+
+### Production Setup
+
+- Runs behind Traefik reverse proxy
+- Uses `SECURE_PROXY_SSL_HEADER` to trust X-Forwarded-Proto header
+- WhiteNoise serves static files
+- Service worker and manifest.json served from root URLs
 
 ## Payment System
 
-Payments will be made through Square using the `squareup` python module which
-is found here: https://pypi.org/project/squareup/ and the official docs can be
-found here: https://developer.squareup.com/docs/sdks/python
+Payments are processed through Square Web Payments SDK:
 
-## User Management
+- **Sandbox URL**: `https://sandbox.web.squarecdn.com/v1/square.js`
+- **Production URL**: `https://web.squarecdn.com/v1/square.js` (no prefix!)
+- Integration in `app/core/payments.py` using `squareup` Python SDK
+- Payment form in `app/templates/core/purchase.html`
 
-This is not a social site so we do not need to worry much about user profiles or
-sharing or anything of that nature. Users can register with an email address, or
-they can use Single Sign-on with their GitHub, Facebook, or other popular social
-media account. Once registered, users can change their email address or password
-if they signed up directly without using SSO, or they can delete their account
-and data completely.
+## File Structure
 
-## File Management
+```
+├── app/                    # Django frontend application
+│   ├── core/              # Main Django app
+│   ├── muxminus/          # Django project settings
+│   ├── static/            # CSS, JS, images, PWA assets
+│   │   ├── css/style.css  # Main stylesheet
+│   │   ├── js/            # JavaScript (waveform-player.js)
+│   │   ├── images/        # Logos, favicons, social card
+│   │   │   └── pwa/       # PWA icons (multiple sizes)
+│   │   ├── demo/          # Demo audio peaks JSON files
+│   │   ├── manifest.json  # PWA manifest
+│   │   └── sw.js          # Service worker
+│   ├── templates/         # Django templates
+│   │   ├── base.html      # Base template with navbar, footer, meta tags
+│   │   └── core/          # Page templates
+│   └── media/             # User uploads and outputs
+├── backend/               # FastAPI backend service
+│   └── app/              # FastAPI application
+├── docker-compose.yml     # Production compose file
+└── docker-compose.override.yml  # Development overrides
+```
 
-To minimize exposure to copyright issues, we do not want to hold on to the
-original music files at all, and we only want to retain the output files long
-enough for the user to download them. I think a reasonable strategy to avoid
-deleting files before the user has downloaded them is to hold on to them for up
-to 24 hours. Once the files have expired, the demucs job should still be shown
-in their dashboard, but the download button and the music playback options will
-be grayed out.
+## Coding Standards
 
-## Job Queuing
+### Django Templates
+- Extend `base.html` for consistent layout
+- Use `{% load static %}` for static file URLs
+- Use Django template tags for URLs: `{% url 'view_name' %}`
 
-We want to use job queuing and API rate limiting to avoid two problems:
+### CSS
+- Use CSS variables defined in `:root` for colors, spacing, etc.
+- Follow BEM-like naming for component classes
+- Mobile-first responsive design with media queries
 
-1. Overwhelming the backend service with highly intensive CPU/GPU tasks.
-2. Consuming excessive disk space for queued jobs.
+### JavaScript
+- Vanilla JS preferred over frameworks
+- Use `data-` attributes for JavaScript hooks
+- Service worker provides offline caching for static assets
 
-We should not allow the user to upload an unlimited number of files to be processed
-either through the web interface or the REST API. If a user has 5 or more jobs
-queued, new uploads must wait. This means the web interface should allow any number
-of uploads, but it can only actually send files to us while there are fewer than
-5 jobs in progress or in the job queue. As jobs complete, the frontend can start
-uploading new jobs. REST API users should get an HTTP response to indicate they
-need to wait and try again later.
-
-## REST API
-
-Users should be able to use the REST API to...
-
-1. Authenticate with an API token they generate from their account profile
-2. List all jobs
-3. Get a job by ID
-4. Download files associated with a job
-5. List the available models
-6. Create a new job and upload a file
-7. Delete jobs
+### Python
+- Follow PEP 8 style guidelines
+- Use type hints where practical
+- Environment variables for all configuration

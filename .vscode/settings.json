@@ -1,0 +1,48 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/app/.venv/bin/python",
+    "python.analysis.typeCheckingMode": "standard",
+    "python.analysis.autoImportCompletions": true,
+    
+    "[python]": {
+        "editor.formatOnSave": true
+    },
+    
+    "[html]": {
+        "editor.defaultFormatter": "vscode.html-language-features",
+        "editor.formatOnSave": true
+    },
+    
+    "[css]": {
+        "editor.defaultFormatter": "vscode.css-language-features",
+        "editor.formatOnSave": true
+    },
+    
+    "[javascript]": {
+        "editor.defaultFormatter": "vscode.typescript-language-features",
+        "editor.formatOnSave": true
+    },
+    
+    "files.associations": {
+        "*.html": "html",
+        "**/templates/**/*.html": "django-html"
+    },
+    
+    "emmet.includeLanguages": {
+        "django-html": "html"
+    },
+    
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/.venv": true,
+        "**/.git": true,
+        "**/node_modules": true
+    },
+    
+    "search.exclude": {
+        "**/.venv": true,
+        "**/__pycache__": true,
+        "**/staticfiles": true,
+        "**/node_modules": true
+    }
+}

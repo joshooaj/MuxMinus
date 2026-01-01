@@ -3,29 +3,39 @@ from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.conf import settings
 import os
 import uuid
+from typing import Optional
 
 from .forms import UserRegistrationForm, UserLoginForm, ProfileUpdateForm, PasswordChangeForm, JobCreateForm
 from .models import Job, CreditPackage, JobStatus
 
 
-def health_check(request):
+def health_check(request: HttpRequest) -> JsonResponse:
     """Health check endpoint for container orchestration."""
     return JsonResponse({"status": "healthy"})
 
 
-def landing_page(request):
-    """Public landing page with product information and demo."""
+def landing_page(request: HttpRequest) -> HttpResponse:
+    """
+    Public landing page with product information and demo.
+    
+    Redirects authenticated users to their dashboard.
+    """
     if request.user.is_authenticated:
         return redirect('dashboard')
     return render(request, 'core/landing.html')
 
 
-def register(request):
-    """User registration view."""
+def register(request: HttpRequest) -> HttpResponse:
+    """
+    User registration view.
+    
+    Creates a new user account with 3 free credits.
+    Redirects to dashboard on successful registration.
+    """
     if request.user.is_authenticated:
         return redirect('dashboard')
     
@@ -42,8 +52,12 @@ def register(request):
     return render(request, 'core/register.html', {'form': form})
 
 
-def user_login(request):
-    """User login view."""
+def user_login(request: HttpRequest) -> HttpResponse:
+    """
+    User login view.
+    
+    Authenticates user and redirects to 'next' URL or dashboard.
+    """
     if request.user.is_authenticated:
         return redirect('dashboard')
     
@@ -62,16 +76,21 @@ def user_login(request):
 
 
 @login_required
-def user_logout(request):
-    """User logout view."""
+def user_logout(request: HttpRequest) -> HttpResponse:
+    """Log out the current user and redirect to landing page."""
     logout(request)
     messages.info(request, 'You have been logged out.')
     return redirect('landing')
 
 
 @login_required
-def dashboard(request):
-    """User dashboard showing jobs and credits."""
+def dashboard(request: HttpRequest) -> HttpResponse:
+    """
+    User dashboard showing recent jobs and credit balance.
+    
+    Displays the 10 most recent jobs and indicates whether
+    the user can upload new files (max 5 queued jobs).
+    """
     jobs = Job.objects.filter(user=request.user)[:10]
     queued_jobs = Job.objects.filter(user=request.user, status__in=[JobStatus.QUEUED, JobStatus.PROCESSING]).count()
     
@@ -84,8 +103,8 @@ def dashboard(request):
 
 
 @login_required
-def profile(request):
-    """User profile management view."""
+def profile(request: HttpRequest) -> HttpResponse:
+    """User profile management view for updating account details."""
     if request.method == 'POST':
         form = ProfileUpdateForm(request.POST, instance=request.user)
         if form.is_valid():
@@ -99,8 +118,13 @@ def profile(request):
 
 
 @login_required
-def change_password(request):
-    """Change password view."""
+def change_password(request: HttpRequest) -> HttpResponse:
+    """
+    Change password view.
+    
+    Validates current password before allowing password change.
+    Keeps user logged in after successful change.
+    """
     if request.method == 'POST':
         form = PasswordChangeForm(request.POST)
         if form.is_valid():
@@ -120,8 +144,13 @@ def change_password(request):
 
 @login_required
 @require_http_methods(['POST'])
-def delete_account(request):
-    """Delete user account and all associated data."""
+def delete_account(request: HttpRequest) -> HttpResponse:
+    """
+    Delete user account and all associated data.
+    
+    This action is irreversible. Logs out the user and deletes
+    their account, jobs, and uploaded files.
+    """
     user = request.user
     logout(request)
     user.delete()
@@ -130,22 +159,31 @@ def delete_account(request):
 
 
 @login_required
-def credits(request):
-    """View for purchasing credits."""
+def credits(request: HttpRequest) -> HttpResponse:
+    """Display available credit packages for purchase."""
     packages = CreditPackage.objects.filter(is_active=True)
     return render(request, 'core/credits.html', {'packages': packages})
 
 
 @login_required
-def jobs_list(request):
-    """View all jobs with pagination."""
+def jobs_list(request: HttpRequest) -> HttpResponse:
+    """Display all jobs for the current user."""
     jobs = Job.objects.filter(user=request.user)
     return render(request, 'core/jobs_list.html', {'jobs': jobs})
 
 
 @login_required
-def job_detail(request, job_id):
-    """View job details."""
+def job_detail(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
+    """
+    Display job details and output files.
+    
+    Syncs job status with backend if still processing.
+    Shows waveform players for completed jobs with available files.
+    
+    Args:
+        request: The HTTP request
+        job_id: UUID of the job to display
+    """
     try:
         job = Job.objects.get(id=job_id, user=request.user)
     except Job.DoesNotExist:
@@ -205,14 +243,26 @@ def job_detail(request, job_id):
     })
 
 
-def demo(request):
-    """Demo page showcasing sample processed audio."""
+def demo(request: HttpRequest) -> HttpResponse:
+    """Demo page showcasing sample processed audio with waveform players."""
     return render(request, 'core/demo.html')
 
 
 @login_required
-def create_job(request):
-    """Create a new separation job."""
+def create_job(request: HttpRequest) -> HttpResponse:
+    """
+    Create a new stem separation job.
+    
+    Validates:
+    - User has fewer than 5 queued jobs
+    - User has at least 1 credit
+    
+    On success:
+    - Saves uploaded file to user's upload directory
+    - Creates job record in database
+    - Submits job to backend service
+    - Deducts 1 credit from user
+    """
     # Check if user can upload (less than 5 queued jobs)
     queued_jobs = Job.objects.filter(
         user=request.user, 
@@ -301,8 +351,19 @@ def create_job(request):
 
 @login_required
 @require_http_methods(["GET"])
-def job_status_api(request, job_id):
-    """API endpoint to get job status for polling."""
+def job_status_api(request: HttpRequest, job_id: uuid.UUID) -> JsonResponse:
+    """
+    API endpoint to get job status for polling.
+    
+    Used by the frontend to poll for job completion.
+    Syncs status with backend and returns current state.
+    
+    Returns JSON:
+        - status: Current job status
+        - files_available: Whether output files can be downloaded
+        - output_files: List of stem files (if completed)
+        - error_message: Error details (if failed)
+    """
     try:
         job = Job.objects.get(id=job_id, user=request.user)
     except Job.DoesNotExist:
@@ -365,8 +426,21 @@ def job_status_api(request, job_id):
 
 
 @login_required
-def download_stem(request, job_id, stem):
-    """Download a specific stem file."""
+def download_stem(request: HttpRequest, job_id: uuid.UUID, stem: str) -> HttpResponse:
+    """
+    Download a specific stem file from a completed job.
+    
+    Args:
+        request: The HTTP request
+        job_id: UUID of the job
+        stem: Name of the stem to download (e.g., 'vocals', 'drums')
+    
+    Returns:
+        FileResponse with the stem audio file
+        
+    Raises:
+        Http404: If job not found, files expired, or stem doesn't exist
+    """
     from django.http import FileResponse, Http404
     
     try:
@@ -403,8 +477,23 @@ def download_stem(request, job_id, stem):
 
 
 @login_required
-def download_all_stems(request, job_id):
-    """Download all stems as a ZIP file."""
+def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
+    """
+    Download all stems from a completed job as a ZIP file.
+    
+    Creates a temporary ZIP file containing all output stems,
+    named with the original filename prefix.
+    
+    Args:
+        request: The HTTP request
+        job_id: UUID of the job
+        
+    Returns:
+        FileResponse with ZIP archive
+        
+    Raises:
+        Http404: If job not found or files expired
+    """
     from django.http import FileResponse, Http404
     import zipfile
     import tempfile
@@ -448,8 +537,16 @@ def download_all_stems(request, job_id):
 
 
 @login_required
-def purchase_credits(request, package_id):
-    """Display the payment form for purchasing a credit package."""
+def purchase_credits(request: HttpRequest, package_id: int) -> HttpResponse:
+    """
+    Display the Square payment form for purchasing a credit package.
+    
+    Verifies Square is configured before showing the payment form.
+    
+    Args:
+        request: The HTTP request
+        package_id: ID of the CreditPackage to purchase
+    """
     from .models import CreditPackage
     
     try:
@@ -479,8 +576,23 @@ def purchase_credits(request, package_id):
 
 
 @login_required
-def process_payment(request, package_id):
-    """Process a payment from the Web Payments SDK."""
+def process_payment(request: HttpRequest, package_id: int) -> JsonResponse:
+    """
+    Process a payment from the Square Web Payments SDK.
+    
+    Receives a payment token from the frontend, creates a payment
+    with Square, and on success adds credits to the user's account.
+    
+    Args:
+        request: POST request with JSON body containing:
+            - sourceId: Payment token from Square SDK
+            - idempotencyKey: Unique key to prevent duplicate charges
+        package_id: ID of the CreditPackage being purchased
+        
+    Returns:
+        JSON response with success status and new credit balance,
+        or error message on failure.
+    """
     import json
     from .models import CreditPackage, Purchase
     from .payments import payment_service
