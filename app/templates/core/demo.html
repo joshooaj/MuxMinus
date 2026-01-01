@@ -26,6 +26,23 @@
                 </p>
             </div>
         </div>
+
+        <!-- 2-Stem Separation -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3>2-Stem Separation (Vocals)</h3>
+            </div>
+            <div class="card-body">
+                <div class="stem-row">
+                    <span class="stem-label">🎤 Vocals Only</span>
+                    <div data-waveform data-src="{% static 'demo/vocals.mp3' %}" data-peaks="{% static 'demo/peaks/vocals.json' %}"></div>
+                </div>
+                <div class="stem-row">
+                    <span class="stem-label">🎶 Instrumental</span>
+                    <div data-waveform data-src="{% static 'demo/no_vocals.mp3' %}" data-peaks="{% static 'demo/peaks/no_vocals.json' %}"></div>
+                </div>
+            </div>
+        </div>
         
         <!-- 6-Stem Separation -->
         <div class="card mb-4">
@@ -56,23 +73,6 @@
                 <div class="stem-row">
                     <span class="stem-label">🎵 Other</span>
                     <div data-waveform data-src="{% static 'demo/other.mp3' %}" data-peaks="{% static 'demo/peaks/other.json' %}"></div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 2-Stem Separation -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3>2-Stem Separation (Vocals)</h3>
-            </div>
-            <div class="card-body">
-                <div class="stem-row">
-                    <span class="stem-label">🎤 Vocals Only</span>
-                    <div data-waveform data-src="{% static 'demo/vocals.mp3' %}" data-peaks="{% static 'demo/peaks/vocals.json' %}"></div>
-                </div>
-                <div class="stem-row">
-                    <span class="stem-label">🎶 Instrumental</span>
-                    <div data-waveform data-src="{% static 'demo/no_vocals.mp3' %}" data-peaks="{% static 'demo/peaks/no_vocals.json' %}"></div>
                 </div>
             </div>
         </div>
