@@ -7,9 +7,11 @@
 </h3>
 
 <p align="center">
-  Break down any song into individual stems for vocals, drums, bass, guitar, piano, and more.
+  Break down any song into individual stems for vocals, drums, bass, guitar,
+  piano, and more.
   <br />
-  Powered by <a href="https://github.com/facebookresearch/demucs">Demucs</a> from Facebook Research.
+  Powered by <a href="https://github.com/facebookresearch/demucs">Demucs</a>
+  from Facebook Research.
 </p>
 
 <p align="center">
@@ -26,7 +28,7 @@
 ## ✨ Features
 
 | | |
-|---|---|
+| - | - |
 | 🎯 **High Quality** | Powered by Demucs, an open-source AI model from Facebook Research |
 | ⚡ **Fast Processing** | No need to install anything — just upload your files |
 | 🎨 **Multiple Stem Options** | Choose from 2, 4, or 6 stem separation |
@@ -68,19 +70,24 @@ Get your separated stems in MP3 or high-quality WAV format.
 
 ## 🤖 AI Models
 
-Multiple spectrogram/waveform separation models are available through Demucs for different tasks.
+Multiple spectrogram/waveform separation models are available through Demucs for
+different tasks.
 
 ### 4-Stem Separation
+
 Separate your music into:
+
 - 🎤 Vocals
 - 🥁 Drums
 - 🎸 Bass
 - 🎹 Other instruments
 
-*Models: htdemucs, htdemucs_ft*
+Models: *htdemucs, htdemucs_ft*
 
 ### 6-Stem Separation
+
 Get even more control with:
+
 - 🎤 Vocals
 - 🥁 Drums
 - 🎸 Bass
@@ -88,15 +95,17 @@ Get even more control with:
 - 🎹 Piano
 - 🎵 Other
 
-*Model: htdemucs_6s*
+Model: *htdemucs_6s*
 
 ### 2-Stem Separation
+
 Quick isolation of a single element:
+
 - 🎤 Vocals + Everything Else
 - 🥁 Drums + Everything Else
 - 🎸 Bass + Everything Else
 
-*Models: htdemucs, htdemucs_ft, htdemucs_6s*
+Models: *htdemucs, htdemucs_ft, htdemucs_6s*
 
 ---
 
@@ -122,9 +131,11 @@ Quick isolation of a single element:
 
 ## 🔬 About Demucs
 
-Mux Minus is built on top of **[Demucs](https://github.com/facebookresearch/demucs)**, an open-source audio source separation model created by **Facebook AI Research (FAIR)**.
+Mux Minus is built on top of **[Demucs](https://github.com/facebookresearch/demucs)**,
+an open-source audio source separation model created by **Facebook AI Research (FAIR)**.
 
-Demucs uses a hybrid approach combining waveform and spectrogram processing with deep learning to achieve state-of-the-art results in music source separation.
+Demucs uses a hybrid approach combining waveform and spectrogram processing with
+deep learning to achieve state-of-the-art results in music source separation.
 
 ### Run Demucs Yourself
 
@@ -153,9 +164,10 @@ demucs -n htdemucs_6s your-song.mp3      # Full 6-stem separation
 
 #### Output
 
-By default, Demucs creates a `separated` folder with subfolders for each model and track:
+By default, Demucs creates a `separated` folder with subfolders for each model
+and track:
 
-```
+```plaintext
 separated/
 └── htdemucs/
     └── your-song/
@@ -174,16 +186,18 @@ For full documentation, visit the [Demucs GitHub repository](https://github.com/
 Mux Minus is built with modern, production-ready technologies:
 
 ### Frontend
+
 | Technology | Purpose |
-|------------|---------|
+| ---------- | ------- |
 | **Django** | Web framework & templating |
 | **Vanilla JS** | Interactive components |
 | **WaveSurfer.js** | Waveform visualization & audio playback |
 | **CSS3** | Modern styling with CSS variables |
 
 ### Backend
+
 | Technology | Purpose |
-|------------|---------|
+| ---------- | ------- |
 | **Django** | REST API, user management, administration |
 | **FastAPI** | Internal backend service for job processing |
 | **Demucs** | AI-powered audio separation |
@@ -191,16 +205,18 @@ Mux Minus is built with modern, production-ready technologies:
 | **SQLite** | Development database |
 
 ### Infrastructure
+
 | Technology | Purpose |
-|------------|---------|
+| ---------- | ------- |
 | **Docker** | Containerization |
 | **Docker Compose** | Multi-container orchestration |
 | **WhiteNoise** | Static file serving |
 | **Traefik** | Reverse proxy (production) |
 
 ### Payments
+
 | Technology | Purpose |
-|------------|---------|
+| ---------- | ------- |
 | **Square** | Payment processing |
 
 ---
@@ -212,5 +228,6 @@ This project is open source. See the [LICENSE](LICENSE) file for details.
 ---
 
 <p align="center">
-  <sub>Built with ❤️ using <a href="https://github.com/facebookresearch/demucs">Demucs</a> and Copilot <i>(Claude Opus 4.5)</i></sub>
+  <sub>Built with ❤️ using <a href="https://github.com/facebookresearch/demucs">Demucs</a>
+  and Copilot <i>(Claude Opus 4.5)</i></sub>
 </p>
