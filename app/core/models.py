@@ -66,6 +66,30 @@ class OutputFormat(models.TextChoices):
     WAV = 'wav', 'WAV (Lossless quality)'
 
 
+class JobType(models.TextChoices):
+    """Job processing type."""
+    SEPARATION = 'separation', 'Audio Separation'
+    TRANSCRIPTION = 'transcription', 'Transcription'
+    LYRICS_PIPELINE = 'lyrics_pipeline', 'Lyrics Generation'
+
+
+class TranscriptionType(models.TextChoices):
+    """Transcription job types."""
+    BASIC = 'basic', 'Basic Text'
+    TIMESTAMPED = 'timestamped', 'Timestamped JSON'
+    SUBTITLES = 'subtitles', 'Subtitles (SRT/VTT)'
+    LYRICS = 'lyrics', 'Lyrics (LRC)'
+
+
+class TranscriptionFormat(models.TextChoices):
+    """Output format for transcription."""
+    TEXT = 'txt', 'Plain Text'
+    JSON = 'json', 'JSON with Timestamps'
+    SRT = 'srt', 'SubRip Subtitles'
+    VTT = 'vtt', 'WebVTT Subtitles'
+    LRC = 'lrc', 'LRC Lyrics'
+
+
 class JobStatus(models.TextChoices):
     """Job processing status."""
     QUEUED = 'queued', 'Queued'
@@ -75,17 +99,30 @@ class JobStatus(models.TextChoices):
 
 
 class Job(models.Model):
-    """Represents a demucs audio separation job."""
+    """Represents a processing job (separation, transcription, or lyrics pipeline)."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='jobs')
     
-    # Job configuration
+    # Job type and configuration
+    job_type = models.CharField(max_length=20, choices=JobType.choices, default=JobType.SEPARATION,
+                                 help_text='Type of processing job')
     original_filename = models.CharField(max_length=255)
-    model = models.CharField(max_length=50, choices=ModelChoice.choices, default=ModelChoice.HTDEMUCS)
+    
+    # Separation-specific fields
+    model = models.CharField(max_length=50, choices=ModelChoice.choices, blank=True, null=True,
+                            help_text='Demucs model for separation jobs')
     two_stem = models.CharField(max_length=20, choices=StemChoice.choices, blank=True, null=True,
                                  help_text='If set, performs 2-stem separation isolating this stem')
     output_format = models.CharField(max_length=10, choices=OutputFormat.choices, default=OutputFormat.MP3,
-                                      help_text='Output audio format')
+                                      help_text='Output audio format for separation')
+    
+    # Transcription-specific fields
+    transcription_type = models.CharField(max_length=20, choices=TranscriptionType.choices, blank=True, null=True,
+                                          help_text='Type of transcription to perform')
+    transcription_format = models.CharField(max_length=10, choices=TranscriptionFormat.choices, blank=True, null=True,
+                                            help_text='Output format for transcription')
+    language = models.CharField(max_length=10, blank=True, null=True,
+                               help_text='Language code for transcription (e.g., en, es)')
     
     # Status tracking
     status = models.CharField(max_length=20, choices=JobStatus.choices, default=JobStatus.QUEUED)
@@ -105,7 +142,7 @@ class Job(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.original_filename} - {self.status}"
+        return f"{self.original_filename} - {self.get_job_type_display()} - {self.status}"
     
     def save(self, *args, **kwargs):
         # Set expiration to 24 hours after completion
@@ -125,6 +162,13 @@ class Job(models.Model):
     def files_available(self):
         """Check if output files are still available for download."""
         return self.status == JobStatus.COMPLETED and not self.is_expired
+    
+    @property
+    def credit_cost(self):
+        """Calculate the credit cost for this job type."""
+        if self.job_type == JobType.LYRICS_PIPELINE:
+            return 2  # Lyrics pipeline costs 2 credits (demucs + whisper)
+        return 1  # All other jobs cost 1 credit
 
 
 class CreditPackage(models.Model):
