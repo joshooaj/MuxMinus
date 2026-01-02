@@ -225,21 +225,65 @@ def job_detail(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     
     # Get list of output files if job is completed
     output_files = []
+    transcription_content = None
+    
     if job.status == JobStatus.COMPLETED and job.files_available:
         output_dir = job.output_path
         if output_dir and os.path.isdir(output_dir):
-            for filename in os.listdir(output_dir):
-                if filename.endswith(('.wav', '.mp3', '.flac')):
-                    stem_name = os.path.splitext(filename)[0]
-                    output_files.append({
-                        'name': stem_name.title(),
-                        'filename': filename,
-                        'stem': stem_name,
-                    })
+            from .models import JobType
+            
+            if job.job_type == JobType.SEPARATION or job.job_type == JobType.LYRICS_PIPELINE:
+                # Audio stem files
+                for filename in os.listdir(output_dir):
+                    if filename.endswith(('.wav', '.mp3', '.flac')):
+                        stem_name = os.path.splitext(filename)[0]
+                        output_files.append({
+                            'name': stem_name.title(),
+                            'filename': filename,
+                            'stem': stem_name,
+                            'type': 'audio',
+                        })
+                
+                # Check for transcription files in lyrics pipeline
+                if job.job_type == JobType.LYRICS_PIPELINE:
+                    for filename in os.listdir(output_dir):
+                        if filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                            output_files.append({
+                                'name': filename,
+                                'filename': filename,
+                                'type': 'transcription',
+                            })
+                            
+                            # Load text content for preview
+                            if filename.endswith(('.txt', '.lrc', '.srt', '.vtt')):
+                                try:
+                                    with open(os.path.join(output_dir, filename), 'r', encoding='utf-8') as f:
+                                        transcription_content = f.read()
+                                except Exception:
+                                    pass
+            
+            elif job.job_type == JobType.TRANSCRIPTION:
+                # Transcription output files
+                for filename in os.listdir(output_dir):
+                    if filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                        output_files.append({
+                            'name': filename,
+                            'filename': filename,
+                            'type': 'transcription',
+                        })
+                        
+                        # Load text content for preview
+                        if filename.endswith(('.txt', '.lrc', '.srt', '.vtt')):
+                            try:
+                                with open(os.path.join(output_dir, filename), 'r', encoding='utf-8') as f:
+                                    transcription_content = f.read()
+                            except Exception:
+                                pass
     
     return render(request, 'core/job_detail.html', {
         'job': job,
         'output_files': output_files,
+        'transcription_content': transcription_content,
     })
 
 
@@ -251,19 +295,21 @@ def demo(request: HttpRequest) -> HttpResponse:
 @login_required
 def create_job(request: HttpRequest) -> HttpResponse:
     """
-    Create a new stem separation job.
+    Create a new processing job (separation, transcription, or lyrics).
     
     Validates:
     - User has fewer than 5 queued jobs
-    - User has at least 1 credit
+    - User has enough credits for the job type
     
     On success:
     - Saves uploaded file to user's upload directory
     - Creates job record in database
     - Submits job to backend service
-    - Deducts 1 credit from user
+    - Deducts appropriate credits (1 for most jobs, 2 for lyrics pipeline)
     """
     # Check if user can upload (less than 5 queued jobs)
+    from .models import JobType, TranscriptionType, TranscriptionFormat
+    
     queued_jobs = Job.objects.filter(
         user=request.user, 
         status__in=[JobStatus.QUEUED, JobStatus.PROCESSING]
@@ -273,20 +319,20 @@ def create_job(request: HttpRequest) -> HttpResponse:
         messages.error(request, 'You have too many jobs in the queue. Please wait for some to complete.')
         return redirect('dashboard')
     
-    # Check if user has credits
-    if not request.user.has_credits():
-        messages.error(request, 'You need credits to process audio files.')
-        return redirect('credits')
-    
     if request.method == 'POST':
         form = JobCreateForm(request.POST, request.FILES)
         if form.is_valid():
-            # Get form data
+            # Get common form data
             audio_file = form.cleaned_data['audio_file']
-            model = form.cleaned_data['model']
-            separation_type = form.cleaned_data['separation_type']
-            two_stem = form.cleaned_data['two_stem'] if separation_type == 'two_stem' else None
-            output_format = form.cleaned_data['output_format']
+            job_type_str = form.cleaned_data['job_type']
+            
+            # Determine credit cost
+            credit_cost = 2 if job_type_str == 'lyrics' else 1
+            
+            # Check if user has enough credits
+            if not request.user.has_credits(credit_cost):
+                messages.error(request, f'You need {credit_cost} credits to create this job.')
+                return redirect('credits')
             
             # Create upload directory if it doesn't exist
             upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
@@ -302,16 +348,61 @@ def create_job(request: HttpRequest) -> HttpResponse:
                 for chunk in audio_file.chunks():
                     destination.write(chunk)
             
-            # Create the job in the database
-            job = Job.objects.create(
-                user=request.user,
-                original_filename=audio_file.name,
-                model=model,
-                two_stem=two_stem,
-                output_format=output_format,
-                input_path=file_path,
-                status=JobStatus.QUEUED,
-            )
+            # Map job_type string to JobType enum
+            job_type_map = {
+                'separation': JobType.SEPARATION,
+                'transcription': JobType.TRANSCRIPTION,
+                'lyrics': JobType.LYRICS_PIPELINE,
+            }
+            job_type = job_type_map[job_type_str]
+            
+            # Create the job in the database based on type
+            if job_type == JobType.SEPARATION:
+                model = form.cleaned_data['model']
+                separation_type = form.cleaned_data['separation_type']
+                two_stem = form.cleaned_data['two_stem'] if separation_type == 'two_stem' else None
+                output_format = form.cleaned_data['output_format']
+                
+                job = Job.objects.create(
+                    user=request.user,
+                    job_type=job_type,
+                    original_filename=audio_file.name,
+                    model=model,
+                    two_stem=two_stem,
+                    output_format=output_format,
+                    input_path=file_path,
+                    status=JobStatus.QUEUED,
+                )
+            
+            elif job_type == JobType.TRANSCRIPTION:
+                transcription_type = form.cleaned_data['transcription_type']
+                transcription_format = form.cleaned_data['transcription_format']
+                language = form.cleaned_data.get('language') or None
+                
+                job = Job.objects.create(
+                    user=request.user,
+                    job_type=job_type,
+                    original_filename=audio_file.name,
+                    transcription_type=transcription_type,
+                    transcription_format=transcription_format,
+                    language=language,
+                    input_path=file_path,
+                    status=JobStatus.QUEUED,
+                )
+            
+            elif job_type == JobType.LYRICS_PIPELINE:
+                language = form.cleaned_data.get('language') or None
+                
+                job = Job.objects.create(
+                    user=request.user,
+                    job_type=job_type,
+                    original_filename=audio_file.name,
+                    transcription_type=TranscriptionType.LYRICS,
+                    transcription_format=TranscriptionFormat.LRC,
+                    language=language,
+                    input_path=file_path,
+                    status=JobStatus.QUEUED,
+                )
             
             # Submit job to backend service
             try:
@@ -320,23 +411,39 @@ def create_job(request: HttpRequest) -> HttpResponse:
                 # Calculate relative path for backend
                 relative_path = os.path.join(str(request.user.id), unique_filename)
                 
-                backend_client.submit_job(
-                    job_id=str(job.id),
-                    input_path=relative_path,
-                    model=model,
-                    two_stem=two_stem,
-                    output_format=output_format,
-                )
+                if job_type == JobType.SEPARATION:
+                    backend_client.submit_job(
+                        job_id=str(job.id),
+                        input_path=relative_path,
+                        model=model,
+                        two_stem=two_stem,
+                        output_format=output_format,
+                    )
+                elif job_type == JobType.TRANSCRIPTION:
+                    backend_client.submit_transcription_job(
+                        job_id=str(job.id),
+                        input_path=relative_path,
+                        transcription_type=transcription_type,
+                        transcription_format=transcription_format,
+                        language=language,
+                    )
+                elif job_type == JobType.LYRICS_PIPELINE:
+                    backend_client.submit_lyrics_pipeline_job(
+                        job_id=str(job.id),
+                        input_path=relative_path,
+                        language=language,
+                    )
             except Exception as e:
                 # Log error but don't fail - job is queued locally
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Failed to submit job to backend: {e}")
             
-            # Deduct credit
-            request.user.use_credits(1)
+            # Deduct credits
+            request.user.use_credits(credit_cost)
             
-            messages.success(request, f'Job created! "{audio_file.name}" is now in the queue.')
+            job_type_name = job.get_job_type_display()
+            messages.success(request, f'{job_type_name} job created! "{audio_file.name}" is now in the queue. ({credit_cost} credit{"s" if credit_cost > 1 else ""} used)')
             return redirect('job_detail', job_id=job.id)
     else:
         form = JobCreateForm()
