@@ -248,9 +248,12 @@ def job_detail(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
                 if job.job_type == JobType.LYRICS_PIPELINE:
                     for filename in os.listdir(output_dir):
                         if filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                            # Get filename without extension for the stem parameter
+                            stem_name = os.path.splitext(filename)[0]
                             output_files.append({
                                 'name': filename,
                                 'filename': filename,
+                                'stem': stem_name,
                                 'type': 'transcription',
                             })
                             
@@ -266,9 +269,12 @@ def job_detail(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
                 # Transcription output files
                 for filename in os.listdir(output_dir):
                     if filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                        # Get filename without extension for the stem parameter
+                        stem_name = os.path.splitext(filename)[0]
                         output_files.append({
                             'name': filename,
                             'filename': filename,
+                            'stem': stem_name,
                             'type': 'transcription',
                         })
                         
@@ -549,18 +555,18 @@ def job_status_api(request: HttpRequest, job_id: uuid.UUID) -> JsonResponse:
 @login_required
 def download_stem(request: HttpRequest, job_id: uuid.UUID, stem: str) -> HttpResponse:
     """
-    Download a specific stem file from a completed job.
+    Download a specific file from a completed job (audio stem or transcription).
     
     Args:
         request: The HTTP request
         job_id: UUID of the job
-        stem: Name of the stem to download (e.g., 'vocals', 'drums')
+        stem: Name of the file to download (e.g., 'vocals', 'drums', 'lyrics', 'transcription')
     
     Returns:
-        FileResponse with the stem audio file
+        FileResponse with the file
         
     Raises:
-        Http404: If job not found, files expired, or stem doesn't exist
+        Http404: If job not found, files expired, or file doesn't exist
     """
     from django.http import FileResponse, Http404
     
@@ -577,16 +583,26 @@ def download_stem(request: HttpRequest, job_id: uuid.UUID, stem: str) -> HttpRes
     if not output_dir or not os.path.isdir(output_dir):
         raise Http404("Output directory not found")
     
-    # Look for the stem file (could be .wav, .mp3, .flac)
+    # Look for the file - could be audio or transcription
     file_path = None
+    
+    # Try audio extensions
     for ext in ['.wav', '.mp3', '.flac']:
         potential_path = os.path.join(output_dir, f"{stem}{ext}")
         if os.path.isfile(potential_path):
             file_path = potential_path
             break
     
+    # Try transcription extensions if not found
     if not file_path:
-        raise Http404("Stem file not found")
+        for ext in ['.txt', '.json', '.srt', '.vtt', '.lrc']:
+            potential_path = os.path.join(output_dir, f"{stem}{ext}")
+            if os.path.isfile(potential_path):
+                file_path = potential_path
+                break
+    
+    if not file_path:
+        raise Http404("File not found")
     
     # Serve the file
     response = FileResponse(
@@ -600,10 +616,10 @@ def download_stem(request: HttpRequest, job_id: uuid.UUID, stem: str) -> HttpRes
 @login_required
 def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     """
-    Download all stems from a completed job as a ZIP file.
+    Download all output files from a completed job as a ZIP file.
     
-    Creates a temporary ZIP file containing all output stems,
-    named with the original filename prefix.
+    Creates a temporary ZIP file containing all output files (audio and/or transcription),
+    named appropriately based on the job type.
     
     Args:
         request: The HTTP request
@@ -616,6 +632,7 @@ def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
         Http404: If job not found or files expired
     """
     from django.http import FileResponse, Http404
+    from .models import JobType
     import zipfile
     import tempfile
     
@@ -634,15 +651,30 @@ def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     # Create a temporary ZIP file
     base_name = job.original_filename.rsplit('.', 1)[0]
     
+    # Determine ZIP filename suffix based on job type
+    if job.job_type == JobType.LYRICS_PIPELINE:
+        zip_suffix = "lyrics"
+    elif job.job_type == JobType.TRANSCRIPTION:
+        zip_suffix = "transcription"
+    else:
+        zip_suffix = "stems"
+    
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
         with zipfile.ZipFile(tmp_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # Add all files from output directory
             for filename in os.listdir(output_dir):
+                # Include audio files
                 if filename.endswith(('.wav', '.mp3', '.flac')):
                     file_path = os.path.join(output_dir, filename)
                     stem_name = os.path.splitext(filename)[0]
                     ext = os.path.splitext(filename)[1]
                     archive_name = f"{base_name}_{stem_name}{ext}"
                     zf.write(file_path, archive_name)
+                # Include transcription files
+                elif filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                    file_path = os.path.join(output_dir, filename)
+                    # Keep the original transcription filename
+                    zf.write(file_path, filename)
         
         tmp_path = tmp_file.name
     
@@ -650,7 +682,7 @@ def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     response = FileResponse(
         open(tmp_path, 'rb'),
         as_attachment=True,
-        filename=f"{base_name}_stems.zip"
+        filename=f"{base_name}_{zip_suffix}.zip"
     )
     # Clean up temp file after response is sent
     response._resource_closers.append(lambda: os.unlink(tmp_path))

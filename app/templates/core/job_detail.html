@@ -66,12 +66,27 @@
                         Files expire: <span data-utc-time="{{ job.expires_at|date:'c' }}">{{ job.expires_at|date:"M d, Y H:i" }}</span>
                     </p>
                     
+                    <!-- Transcription Content Preview -->
+                    {% if transcription_content %}
+                    <div class="card mb-4" style="background: var(--bg-secondary);">
+                        <div class="card-header">
+                            <h4>📝 Transcription Preview</h4>
+                        </div>
+                        <div class="card-body">
+                            <pre style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto; background: var(--bg-primary); padding: 1rem; border-radius: 4px;">{{ transcription_content }}</pre>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Audio Files -->
+                    {% if output_files %}
                     <div class="stems-grid">
                         {% for file in output_files %}
+                        {% if file.type == 'audio' %}
                         <div class="card stem-card">
                             <div class="card-header">
                                 <h4>
-                                    {% if file.stem == 'vocals' %}🎤{% elif file.stem == 'drums' %}🥁{% elif file.stem == 'bass' %}🎸{% elif file.stem == 'guitar' %}🎸{% elif file.stem == 'piano' %}🎹{% else %}🎵{% endif %}
+                                    {% if file.stem == 'vocals' %}🎤{% elif file.stem == 'drums' %}🥁{% elif file.stem == 'bass' %}🎸{% elif file.stem == 'guitar' %}🎸{% elif file.stem == 'piano' %}🎹{% elif file.stem == 'no_vocals' %}🎶{% else %}🎵{% endif %}
                                     {{ file.name }}
                                 </h4>
                             </div>
@@ -85,8 +100,24 @@
                                 </a>
                             </div>
                         </div>
+                        {% endif %}
                         {% endfor %}
                     </div>
+                    {% endif %}
+                    
+                    <!-- Transcription Files -->
+                    {% for file in output_files %}
+                    {% if file.type == 'transcription' %}
+                    <div class="card mt-3" style="background: var(--bg-secondary);">
+                        <div class="card-body">
+                            <strong>📄 {{ file.name }}</strong>
+                            <a href="{% url 'download_stem' job.id file.stem %}" class="btn btn-sm btn-outline ml-2" download>
+                                ⬇️ Download
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
                     
                     <div class="mt-4">
                         <a href="{% url 'download_all_stems' job.id %}" class="btn btn-primary" download>

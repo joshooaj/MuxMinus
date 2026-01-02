@@ -247,15 +247,15 @@ class JobQueue:
         
         loop = asyncio.get_event_loop()
         
-        # Separate vocals using 2-stem mode
+        # Separate vocals directly to the main output directory (not a subdirectory)
         separation_output = await loop.run_in_executor(
             None,
             lambda: separation_service.separate(
                 input_path=job.input_path,
-                output_dir=job.output_dir / "vocals",
+                output_dir=job.output_dir,  # Save directly to output_dir
                 model=ModelChoice.HTDEMUCS,
                 two_stem=StemChoice.VOCALS,
-                output_format=OutputFormat.WAV,  # Use WAV for better transcription quality
+                output_format=OutputFormat.MP3,  # Use MP3 for smaller file size
                 progress_callback=separation_progress,
             )
         )
