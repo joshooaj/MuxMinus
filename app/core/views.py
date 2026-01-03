@@ -225,21 +225,50 @@ def job_detail(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     
     # Get list of output files if job is completed
     output_files = []
+    transcription_content = None
+    
     if job.status == JobStatus.COMPLETED and job.files_available:
         output_dir = job.output_path
         if output_dir and os.path.isdir(output_dir):
-            for filename in os.listdir(output_dir):
-                if filename.endswith(('.wav', '.mp3', '.flac')):
-                    stem_name = os.path.splitext(filename)[0]
-                    output_files.append({
-                        'name': stem_name.title(),
-                        'filename': filename,
-                        'stem': stem_name,
-                    })
+            from .models import JobType
+            
+            if job.job_type == JobType.SEPARATION:
+                # Audio stem files
+                for filename in os.listdir(output_dir):
+                    if filename.endswith(('.wav', '.mp3', '.flac')):
+                        stem_name = os.path.splitext(filename)[0]
+                        output_files.append({
+                            'name': stem_name.title(),
+                            'filename': filename,
+                            'stem': stem_name,
+                            'type': 'audio',
+                        })
+            
+            elif job.job_type == JobType.TRANSCRIPTION:
+                # Transcription output files
+                for filename in os.listdir(output_dir):
+                    if filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                        # Get filename without extension for the stem parameter
+                        stem_name = os.path.splitext(filename)[0]
+                        output_files.append({
+                            'name': filename,
+                            'filename': filename,
+                            'stem': stem_name,
+                            'type': 'transcription',
+                        })
+                        
+                        # Load text content for preview
+                        if filename.endswith(('.txt', '.lrc', '.srt', '.vtt')):
+                            try:
+                                with open(os.path.join(output_dir, filename), 'r', encoding='utf-8') as f:
+                                    transcription_content = f.read()
+                            except Exception:
+                                pass
     
     return render(request, 'core/job_detail.html', {
         'job': job,
         'output_files': output_files,
+        'transcription_content': transcription_content,
     })
 
 
@@ -251,19 +280,22 @@ def demo(request: HttpRequest) -> HttpResponse:
 @login_required
 def create_job(request: HttpRequest) -> HttpResponse:
     """
-    Create a new stem separation job.
+    Create a new processing job (separation, transcription, or lyrics).
     
     Validates:
     - User has fewer than 5 queued jobs
-    - User has at least 1 credit
+    - User has enough credits for the job type
     
     On success:
     - Saves uploaded file to user's upload directory
     - Creates job record in database
     - Submits job to backend service
-    - Deducts 1 credit from user
+    - Deducts 1 credit
     """
     # Check if user can upload (less than 5 queued jobs)
+    from .models import JobType, TranscriptionType, TranscriptionFormat
+    from .constants import CREDIT_COST_SEPARATION, CREDIT_COST_TRANSCRIPTION
+    
     queued_jobs = Job.objects.filter(
         user=request.user, 
         status__in=[JobStatus.QUEUED, JobStatus.PROCESSING]
@@ -273,20 +305,31 @@ def create_job(request: HttpRequest) -> HttpResponse:
         messages.error(request, 'You have too many jobs in the queue. Please wait for some to complete.')
         return redirect('dashboard')
     
-    # Check if user has credits
-    if not request.user.has_credits():
-        messages.error(request, 'You need credits to process audio files.')
-        return redirect('credits')
-    
     if request.method == 'POST':
         form = JobCreateForm(request.POST, request.FILES)
         if form.is_valid():
-            # Get form data
+            # Get common form data
             audio_file = form.cleaned_data['audio_file']
-            model = form.cleaned_data['model']
-            separation_type = form.cleaned_data['separation_type']
-            two_stem = form.cleaned_data['two_stem'] if separation_type == 'two_stem' else None
-            output_format = form.cleaned_data['output_format']
+            job_type_str = form.cleaned_data['job_type']
+            
+            # Map job_type string to JobType enum for credit calculation
+            job_type_map = {
+                'separation': JobType.SEPARATION,
+                'transcription': JobType.TRANSCRIPTION,
+            }
+            job_type_enum = job_type_map[job_type_str]
+            
+            # Calculate credit cost using constants
+            credit_cost_map = {
+                JobType.SEPARATION: CREDIT_COST_SEPARATION,
+                JobType.TRANSCRIPTION: CREDIT_COST_TRANSCRIPTION,
+            }
+            credit_cost = credit_cost_map[job_type_enum]
+            
+            # Check if user has enough credits
+            if not request.user.has_credits(credit_cost):
+                messages.error(request, f'You need {credit_cost} credits to create this job.')
+                return redirect('credits')
             
             # Create upload directory if it doesn't exist
             upload_dir = os.path.join(settings.MEDIA_ROOT, 'uploads', str(request.user.id))
@@ -302,16 +345,54 @@ def create_job(request: HttpRequest) -> HttpResponse:
                 for chunk in audio_file.chunks():
                     destination.write(chunk)
             
-            # Create the job in the database
-            job = Job.objects.create(
-                user=request.user,
-                original_filename=audio_file.name,
-                model=model,
-                two_stem=two_stem,
-                output_format=output_format,
-                input_path=file_path,
-                status=JobStatus.QUEUED,
-            )
+            # Map job_type string to JobType enum
+            job_type_map = {
+                'separation': JobType.SEPARATION,
+                'transcription': JobType.TRANSCRIPTION,
+            }
+            job_type = job_type_map[job_type_str]
+            
+            # Create the job in the database based on type
+            if job_type == JobType.SEPARATION:
+                model = form.cleaned_data['model']
+                separation_type = form.cleaned_data['separation_type']
+                two_stem = form.cleaned_data['two_stem'] if separation_type == 'two_stem' else None
+                output_format = form.cleaned_data['output_format']
+                
+                job = Job.objects.create(
+                    user=request.user,
+                    job_type=job_type,
+                    original_filename=audio_file.name,
+                    model=model,
+                    two_stem=two_stem,
+                    output_format=output_format,
+                    input_path=file_path,
+                    status=JobStatus.QUEUED,
+                )
+            
+            elif job_type == JobType.TRANSCRIPTION:
+                # Get the output format and map to transcription_type and transcription_format
+                transcription_output_format = form.cleaned_data['transcription_output_format']
+                language = form.cleaned_data.get('language') or None
+                
+                # Map output format to internal transcription_type and transcription_format
+                output_format_mapping = {
+                    'txt': ('basic', 'txt'),
+                    'subtitles': ('subtitles', 'srt'),  # Backend generates both SRT and VTT
+                    'lrc': ('lyrics', 'lrc'),
+                }
+                transcription_type, transcription_format = output_format_mapping[transcription_output_format]
+                
+                job = Job.objects.create(
+                    user=request.user,
+                    job_type=job_type,
+                    original_filename=audio_file.name,
+                    transcription_type=transcription_type,
+                    transcription_format=transcription_format,
+                    language=language,
+                    input_path=file_path,
+                    status=JobStatus.QUEUED,
+                )
             
             # Submit job to backend service
             try:
@@ -320,23 +401,33 @@ def create_job(request: HttpRequest) -> HttpResponse:
                 # Calculate relative path for backend
                 relative_path = os.path.join(str(request.user.id), unique_filename)
                 
-                backend_client.submit_job(
-                    job_id=str(job.id),
-                    input_path=relative_path,
-                    model=model,
-                    two_stem=two_stem,
-                    output_format=output_format,
-                )
+                if job_type == JobType.SEPARATION:
+                    backend_client.submit_job(
+                        job_id=str(job.id),
+                        input_path=relative_path,
+                        model=model,
+                        two_stem=two_stem,
+                        output_format=output_format,
+                    )
+                elif job_type == JobType.TRANSCRIPTION:
+                    backend_client.submit_transcription_job(
+                        job_id=str(job.id),
+                        input_path=relative_path,
+                        transcription_type=transcription_type,
+                        transcription_format=transcription_format,
+                        language=language,
+                    )
             except Exception as e:
                 # Log error but don't fail - job is queued locally
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Failed to submit job to backend: {e}")
             
-            # Deduct credit
-            request.user.use_credits(1)
+            # Deduct credits
+            request.user.use_credits(credit_cost)
             
-            messages.success(request, f'Job created! "{audio_file.name}" is now in the queue.')
+            job_type_name = job.get_job_type_display()
+            messages.success(request, f'{job_type_name} job created! "{audio_file.name}" is now in the queue. ({credit_cost} credit{"s" if credit_cost > 1 else ""} used)')
             return redirect('job_detail', job_id=job.id)
     else:
         form = JobCreateForm()
@@ -410,17 +501,50 @@ def job_status_api(request: HttpRequest, job_id: uuid.UUID) -> JsonResponse:
     if job.status == JobStatus.COMPLETED and job.files_available:
         output_dir = job.output_path
         output_files = []
+        transcription_content = None
+        job_type = job.job_type
+        
         if output_dir and os.path.isdir(output_dir):
-            for filename in os.listdir(output_dir):
-                if filename.endswith(('.wav', '.mp3', '.flac')):
-                    stem_name = os.path.splitext(filename)[0]
-                    output_files.append({
-                        'name': stem_name.title(),
-                        'filename': filename,
-                        'stem': stem_name,
-                        'download_url': f'/jobs/{job_id}/download/{stem_name}/',
-                    })
+            from .models import JobType
+            
+            if job_type == JobType.SEPARATION:
+                # Audio stem files
+                for filename in os.listdir(output_dir):
+                    if filename.endswith(('.wav', '.mp3', '.flac')):
+                        stem_name = os.path.splitext(filename)[0]
+                        output_files.append({
+                            'name': stem_name.title(),
+                            'filename': filename,
+                            'stem': stem_name,
+                            'type': 'audio',
+                            'download_url': f'/jobs/{job_id}/download/{stem_name}/',
+                        })
+            
+            elif job_type == JobType.TRANSCRIPTION:
+                # Transcription output files
+                for filename in os.listdir(output_dir):
+                    if filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                        stem_name = os.path.splitext(filename)[0]
+                        output_files.append({
+                            'name': filename,
+                            'filename': filename,
+                            'stem': stem_name,
+                            'type': 'transcription',
+                            'download_url': f'/jobs/{job_id}/download/{stem_name}/',
+                        })
+                        
+                        # Load text content for preview (prefer .txt, then .srt/.vtt/.lrc)
+                        if transcription_content is None and filename.endswith(('.txt', '.lrc', '.srt', '.vtt')):
+                            try:
+                                with open(os.path.join(output_dir, filename), 'r', encoding='utf-8') as f:
+                                    transcription_content = f.read()
+                            except Exception:
+                                pass
+        
         response_data['output_files'] = output_files
+        response_data['job_type'] = job_type
+        if transcription_content:
+            response_data['transcription_content'] = transcription_content
     
     return JsonResponse(response_data)
 
@@ -428,18 +552,18 @@ def job_status_api(request: HttpRequest, job_id: uuid.UUID) -> JsonResponse:
 @login_required
 def download_stem(request: HttpRequest, job_id: uuid.UUID, stem: str) -> HttpResponse:
     """
-    Download a specific stem file from a completed job.
+    Download a specific file from a completed job (audio stem or transcription).
     
     Args:
         request: The HTTP request
         job_id: UUID of the job
-        stem: Name of the stem to download (e.g., 'vocals', 'drums')
+        stem: Name of the file to download (e.g., 'vocals', 'drums', 'lyrics', 'transcription')
     
     Returns:
-        FileResponse with the stem audio file
+        FileResponse with the file
         
     Raises:
-        Http404: If job not found, files expired, or stem doesn't exist
+        Http404: If job not found, files expired, or file doesn't exist
     """
     from django.http import FileResponse, Http404
     
@@ -456,16 +580,26 @@ def download_stem(request: HttpRequest, job_id: uuid.UUID, stem: str) -> HttpRes
     if not output_dir or not os.path.isdir(output_dir):
         raise Http404("Output directory not found")
     
-    # Look for the stem file (could be .wav, .mp3, .flac)
+    # Look for the file - could be audio or transcription
     file_path = None
+    
+    # Try audio extensions
     for ext in ['.wav', '.mp3', '.flac']:
         potential_path = os.path.join(output_dir, f"{stem}{ext}")
         if os.path.isfile(potential_path):
             file_path = potential_path
             break
     
+    # Try transcription extensions if not found
     if not file_path:
-        raise Http404("Stem file not found")
+        for ext in ['.txt', '.json', '.srt', '.vtt', '.lrc']:
+            potential_path = os.path.join(output_dir, f"{stem}{ext}")
+            if os.path.isfile(potential_path):
+                file_path = potential_path
+                break
+    
+    if not file_path:
+        raise Http404("File not found")
     
     # Serve the file
     response = FileResponse(
@@ -479,10 +613,10 @@ def download_stem(request: HttpRequest, job_id: uuid.UUID, stem: str) -> HttpRes
 @login_required
 def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     """
-    Download all stems from a completed job as a ZIP file.
+    Download all output files from a completed job as a ZIP file.
     
-    Creates a temporary ZIP file containing all output stems,
-    named with the original filename prefix.
+    Creates a temporary ZIP file containing all output files (audio and/or transcription),
+    named appropriately based on the job type.
     
     Args:
         request: The HTTP request
@@ -495,6 +629,7 @@ def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
         Http404: If job not found or files expired
     """
     from django.http import FileResponse, Http404
+    from .models import JobType
     import zipfile
     import tempfile
     
@@ -513,15 +648,28 @@ def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     # Create a temporary ZIP file
     base_name = job.original_filename.rsplit('.', 1)[0]
     
+    # Determine ZIP filename suffix based on job type
+    if job.job_type == JobType.TRANSCRIPTION:
+        zip_suffix = "transcription"
+    else:
+        zip_suffix = "stems"
+    
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
         with zipfile.ZipFile(tmp_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # Add all files from output directory
             for filename in os.listdir(output_dir):
+                # Include audio files
                 if filename.endswith(('.wav', '.mp3', '.flac')):
                     file_path = os.path.join(output_dir, filename)
                     stem_name = os.path.splitext(filename)[0]
                     ext = os.path.splitext(filename)[1]
                     archive_name = f"{base_name}_{stem_name}{ext}"
                     zf.write(file_path, archive_name)
+                # Include transcription files
+                elif filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                    file_path = os.path.join(output_dir, filename)
+                    # Keep the original transcription filename
+                    zf.write(file_path, filename)
         
         tmp_path = tmp_file.name
     
@@ -529,7 +677,7 @@ def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     response = FileResponse(
         open(tmp_path, 'rb'),
         as_attachment=True,
-        filename=f"{base_name}_stems.zip"
+        filename=f"{base_name}_{zip_suffix}.zip"
     )
     # Clean up temp file after response is sent
     response._resource_closers.append(lambda: os.unlink(tmp_path))

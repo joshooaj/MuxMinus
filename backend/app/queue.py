@@ -1,5 +1,5 @@
 """
-Job queue manager for handling concurrent separation jobs.
+Job queue manager for handling concurrent separation and transcription jobs.
 """
 import asyncio
 import logging
@@ -12,21 +12,42 @@ from enum import Enum
 import traceback
 
 from .config import settings
-from .models import JobStatus, ModelChoice, StemChoice, OutputFormat
+from .models import (
+    JobStatus, 
+    ModelChoice, 
+    StemChoice, 
+    OutputFormat,
+    JobType,
+    TranscriptionType,
+    TranscriptionFormat,
+)
 from .separator import separation_service
+from .transcriber import transcription_service
 
 logger = logging.getLogger(__name__)
+
+# Progress scaling constants
+SEPARATION_PROGRESS_SCALE = 0.9  # Reserve 10% for finalization
 
 
 @dataclass
 class Job:
-    """Represents a separation job."""
+    """Represents a processing job (separation, transcription, or pipeline)."""
     job_id: str
+    job_type: JobType
     input_path: Path
     output_dir: Path
-    model: ModelChoice
-    two_stem: Optional[StemChoice]
+    # Separation-specific fields
+    model: Optional[ModelChoice] = None
+    two_stem: Optional[StemChoice] = None
     output_format: OutputFormat = OutputFormat.MP3
+    # Transcription-specific fields
+    transcription_type: Optional[TranscriptionType] = None
+    transcription_format: Optional[TranscriptionFormat] = None
+    language: Optional[str] = None
+    # Pipeline-specific fields (for vocals isolation path)
+    vocals_path: Optional[Path] = None
+    # Common fields
     status: JobStatus = JobStatus.QUEUED
     progress: float = 0.0
     current_step: str = ""
@@ -121,39 +142,27 @@ class JobQueue:
             logger.warning(f"Job {job_id} not found in jobs dict")
             return
         
-        logger.info(f"Worker {worker_id} processing job {job_id}")
+        logger.info(f"Worker {worker_id} processing job {job_id} (type: {job.job_type.value})")
         
         job.status = JobStatus.PROCESSING
         job.started_at = datetime.utcnow()
-        job.current_step = "Loading audio file"
+        job.current_step = "Starting job"
         
         start_time = time.time()
         
         try:
-            # Progress callback to update job progress
-            def progress_callback(info: dict):
-                job.progress = info.get("progress", 0)
-                job.current_step = f"Separating ({info.get('state', 'processing')})"
+            # Route to appropriate handler based on job type
+            if job.job_type == JobType.SEPARATION:
+                await self._process_separation(job)
+            elif job.job_type == JobType.TRANSCRIPTION:
+                await self._process_transcription(job)
+            else:
+                raise ValueError(f"Unknown job type: {job.job_type}")
             
-            # Run separation in a thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            output_files = await loop.run_in_executor(
-                None,
-                lambda: separation_service.separate(
-                    input_path=job.input_path,
-                    output_dir=job.output_dir,
-                    model=job.model,
-                    two_stem=job.two_stem,
-                    output_format=job.output_format,
-                    progress_callback=progress_callback,
-                )
-            )
-            
-            # Update job with results
+            # Update job with success
             job.status = JobStatus.COMPLETED
             job.progress = 100.0
             job.current_step = "Complete"
-            job.output_files = [str(p.relative_to(settings.outputs_dir)) for p in output_files.values()]
             job.completed_at = datetime.utcnow()
             job.processing_time = time.time() - start_time
             
@@ -168,23 +177,84 @@ class JobQueue:
             logger.error(f"Job {job_id} failed: {e}")
             logger.debug(traceback.format_exc())
     
+    async def _process_separation(self, job: Job):
+        """Process a separation job."""
+        job.current_step = "Loading audio file"
+        
+        # Progress callback to update job progress
+        def progress_callback(info: dict):
+            job.progress = info.get("progress", 0) * SEPARATION_PROGRESS_SCALE
+            job.current_step = f"Separating ({info.get('state', 'processing')})"
+        
+        # Run separation in a thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        output_files = await loop.run_in_executor(
+            None,
+            lambda: separation_service.separate(
+                input_path=job.input_path,
+                output_dir=job.output_dir,
+                model=job.model,
+                two_stem=job.two_stem,
+                output_format=job.output_format,
+                progress_callback=progress_callback,
+            )
+        )
+        
+        # Update job with results
+        job.output_files = [str(p.relative_to(settings.outputs_dir)) for p in output_files.values()]
+    
+    async def _process_transcription(self, job: Job):
+        """Process a transcription job."""
+        job.current_step = "Loading audio/video file"
+        
+        # Progress callback to update job progress
+        def progress_callback(info: dict):
+            job.progress = info.get("progress", 0)
+            state = info.get("state", "processing")
+            job.current_step = f"Transcribing ({state})"
+        
+        # Run transcription in a thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        output_files = await loop.run_in_executor(
+            None,
+            lambda: transcription_service.transcribe(
+                input_path=job.input_path,
+                output_dir=job.output_dir,
+                transcription_type=job.transcription_type,
+                transcription_format=job.transcription_format,
+                language=job.language,
+                progress_callback=progress_callback,
+            )
+        )
+        
+        # Update job with results
+        job.output_files = [str(p.relative_to(settings.outputs_dir)) for p in output_files.values()]
+    
     async def submit(
         self,
         job_id: str,
         input_path: Path,
-        model: ModelChoice = ModelChoice.HTDEMUCS,
+        job_type: JobType = JobType.SEPARATION,
+        model: Optional[ModelChoice] = None,
         two_stem: Optional[StemChoice] = None,
         output_format: OutputFormat = OutputFormat.MP3,
+        transcription_type: Optional[TranscriptionType] = None,
+        transcription_format: Optional[TranscriptionFormat] = None,
+        language: Optional[str] = None,
     ) -> Job:
         """
         Submit a new job to the queue.
         
         Args:
             job_id: Unique job identifier
-            input_path: Path to input audio file
-            model: Demucs model to use
+            input_path: Path to input audio/video file
+            job_type: Type of job (separation or transcription)
+            model: Demucs model to use (for separation jobs)
             two_stem: Optional stem for two-stem separation
             output_format: Output audio format
+            transcription_type: Type of transcription (for transcription jobs)
+            transcription_format: Output format for transcription
+            language: Language code for transcription
             
         Returns:
             The created Job object
@@ -202,21 +272,25 @@ class JobQueue:
         output_dir = settings.outputs_dir / job_id
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create job object
+        # Create job object with appropriate fields
         job = Job(
             job_id=job_id,
+            job_type=job_type,
             input_path=input_path,
             output_dir=output_dir,
             model=model,
             two_stem=two_stem,
             output_format=output_format,
+            transcription_type=transcription_type,
+            transcription_format=transcription_format,
+            language=language,
         )
         
         # Store and queue the job
         self._jobs[job_id] = job
         await self._queue.put(job_id)
         
-        logger.info(f"Job {job_id} submitted to queue")
+        logger.info(f"Job {job_id} (type: {job_type.value}) submitted to queue")
         return job
     
     def get_job(self, job_id: str) -> Optional[Job]:

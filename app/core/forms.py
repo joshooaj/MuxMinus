@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth import get_user_model
 from .models import Job, ModelChoice, StemChoice, OutputFormat
+from .constants import MAX_UPLOAD_SIZE_SEPARATION, MAX_UPLOAD_SIZE_TRANSCRIPTION
 
 User = get_user_model()
 
@@ -122,7 +123,12 @@ class PasswordChangeForm(forms.Form):
 
 
 class JobCreateForm(forms.Form):
-    """Form for creating a new separation job."""
+    """Form for creating a new processing job (separation or transcription)."""
+    
+    JOB_TYPE_CHOICES = [
+        ('separation', 'Audio Separation'),
+        ('transcription', 'Speech Transcription'),
+    ]
     
     SEPARATION_TYPE_CHOICES = [
         ('full', 'Full Separation'),
@@ -141,28 +147,46 @@ class JobCreateForm(forms.Form):
         ('bass', 'Bass (isolate bass from the rest)'),
     ]
     
+    # Simplified transcription output format choices
+    TRANSCRIPTION_OUTPUT_FORMAT_CHOICES = [
+        ('txt', 'Plain Text (TXT)'),
+        ('subtitles', 'Subtitles (SRT, VTT)'),
+        ('lrc', 'Lyrics (LRC)'),
+    ]
+    
     OUTPUT_FORMAT_CHOICES = [
         ('mp3', 'MP3 (Smaller files, good quality)'),
         ('wav', 'WAV (Lossless quality, larger files)'),
     ]
     
+    # Common fields
+    job_type = forms.ChoiceField(
+        choices=JOB_TYPE_CHOICES,
+        initial='separation',
+        widget=forms.RadioSelect(attrs={'class': 'form-radio'}),
+        label='Job Type',
+    )
+    
     audio_file = forms.FileField(
         widget=forms.FileInput(attrs={
             'class': 'form-input',
-            'accept': 'audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac',
+            'accept': 'audio/*,video/*,.mp3,.wav,.flac,.ogg,.m4a,.aac,.mp4,.mkv,.avi',
         }),
-        help_text='Supported formats: MP3, WAV, FLAC, OGG, M4A, AAC'
+        help_text='Supported formats: MP3, WAV, FLAC, OGG, M4A, AAC, MP4, MKV, AVI (max 5GB for transcription)'
     )
     
+    # Separation-specific fields
     separation_type = forms.ChoiceField(
         choices=SEPARATION_TYPE_CHOICES,
         initial='full',
+        required=False,
         widget=forms.RadioSelect(attrs={'class': 'form-radio'}),
     )
     
     model = forms.ChoiceField(
         choices=MODEL_CHOICES,
         initial='htdemucs',
+        required=False,
         widget=forms.RadioSelect(attrs={'class': 'form-radio'}),
     )
     
@@ -176,20 +200,49 @@ class JobCreateForm(forms.Form):
     output_format = forms.ChoiceField(
         choices=OUTPUT_FORMAT_CHOICES,
         initial='mp3',
+        required=False,
         widget=forms.RadioSelect(attrs={'class': 'form-radio'}),
         help_text='MP3 is recommended for most users. WAV provides lossless quality but larger file sizes.',
     )
     
+    # Transcription-specific fields
+    transcription_output_format = forms.ChoiceField(
+        choices=TRANSCRIPTION_OUTPUT_FORMAT_CHOICES,
+        initial='txt',
+        required=False,
+        widget=forms.RadioSelect(attrs={'class': 'form-radio'}),
+    )
+    
+    language = forms.CharField(
+        required=False,
+        max_length=10,
+        widget=forms.TextInput(attrs={
+            'class': 'form-input',
+            'placeholder': 'Auto-detect (or enter: en, es, fr, de, etc.)',
+        }),
+        help_text='Leave blank for automatic language detection',
+    )
+    
     def clean_audio_file(self):
         audio_file = self.cleaned_data.get('audio_file')
+        job_type = self.data.get('job_type', 'separation')
+        
         if audio_file:
-            # Check file size (max 100MB)
-            max_size = 100 * 1024 * 1024  # 100MB
+            # Check file size based on job type
+            if job_type == 'transcription':
+                max_size = MAX_UPLOAD_SIZE_TRANSCRIPTION
+            else:
+                max_size = MAX_UPLOAD_SIZE_SEPARATION
+            
             if audio_file.size > max_size:
-                raise forms.ValidationError('File size must be under 100MB.')
+                max_mb = max_size // (1024 * 1024)
+                raise forms.ValidationError(f'File size must be under {max_mb}MB for {job_type} jobs.')
             
             # Check file extension
             allowed_extensions = ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac', '.wma', '.aiff']
+            if job_type == 'transcription':
+                allowed_extensions.extend(['.mp4', '.mkv', '.avi', '.mov', '.webm'])
+            
             ext = '.' + audio_file.name.lower().split('.')[-1] if '.' in audio_file.name else ''
             if ext not in allowed_extensions:
                 raise forms.ValidationError(f'Unsupported file format. Allowed: {", ".join(allowed_extensions)}')
@@ -198,21 +251,17 @@ class JobCreateForm(forms.Form):
     
     def clean(self):
         cleaned_data = super().clean()
+        job_type = cleaned_data.get('job_type')
         separation_type = cleaned_data.get('separation_type')
-        model = cleaned_data.get('model')
         two_stem = cleaned_data.get('two_stem')
         
-        # Validate two-stem selection
-        if separation_type == 'two_stem' and not two_stem:
-            raise forms.ValidationError('Please select which stem to isolate for two-stem separation.')
-        
-        # Clear two_stem if doing full separation
-        if separation_type == 'full':
-            cleaned_data['two_stem'] = None
-        
-        # Validate model choice for two-stem (6-stem model doesn't make sense for 2-stem)
-        if separation_type == 'two_stem' and model == 'htdemucs_6s':
-            # Allow it, but user should know 6-stem is not optimal for 2-stem
-            pass
+        # Validate separation options
+        if job_type == 'separation':
+            if separation_type == 'two_stem' and not two_stem:
+                raise forms.ValidationError('Please select which stem to isolate for two-stem separation.')
+            
+            # Clear two_stem if doing full separation
+            if separation_type == 'full':
+                cleaned_data['two_stem'] = None
         
         return cleaned_data

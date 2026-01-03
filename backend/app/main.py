@@ -22,6 +22,8 @@ from .models import (
     QueueStatusResponse,
     JobStatus,
     ModelChoice,
+    TranscriptionRequest,
+    JobType,
 )
 from .queue import job_queue
 from .separator import separation_service
@@ -192,6 +194,7 @@ async def create_job(
         job = await job_queue.submit(
             job_id=request.job_id,
             input_path=input_path,
+            job_type=JobType.SEPARATION,
             model=request.model,
             two_stem=request.two_stem,
             output_format=request.output_format,
@@ -269,6 +272,76 @@ async def delete_job(job_id: str, _: bool = Depends(verify_api_key)):
     
     job_queue.remove_job(job_id)
     return {"message": f"Job {job_id} removed"}
+
+
+# =============================================================================
+# Transcription Endpoints
+# =============================================================================
+
+@app.post("/transcribe", response_model=JobStatusResponse, tags=["Transcription"])
+async def create_transcription_job(
+    request: TranscriptionRequest,
+    _: bool = Depends(verify_api_key),
+):
+    """
+    Submit a new transcription job.
+    
+    The job will be queued and processed asynchronously. Use the
+    GET /jobs/{job_id} endpoint to check the status and retrieve results.
+    """
+    # Check if queue can accept jobs
+    if not job_queue.can_accept_jobs:
+        raise HTTPException(
+            status_code=503,
+            detail="Job queue is full. Please try again later.",
+        )
+    
+    # Construct input path
+    input_path = settings.uploads_dir / request.input_path
+    
+    # Verify input file exists
+    if not input_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Input file not found: {request.input_path}",
+        )
+    
+    # Check file size (max 5GB for transcription)
+    if input_path.stat().st_size > settings.max_upload_size_transcription:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File size exceeds 5GB limit for transcription jobs",
+        )
+    
+    # Check if job already exists
+    existing_job = job_queue.get_job(request.job_id)
+    if existing_job:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job {request.job_id} already exists",
+        )
+    
+    try:
+        # Submit job to queue
+        job = await job_queue.submit(
+            job_id=request.job_id,
+            input_path=input_path,
+            job_type=JobType.TRANSCRIPTION,
+            transcription_type=request.transcription_type,
+            transcription_format=request.transcription_format,
+            language=request.language,
+        )
+        
+        return JobStatusResponse(
+            job_id=job.job_id,
+            status=job.status,
+            progress=job.progress,
+            current_step=job.current_step,
+            created_at=job.created_at,
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # =============================================================================

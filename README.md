@@ -3,23 +3,24 @@
 </p>
 
 <h3 align="center">
-  🎵 Separate Your Music Into Individual Tracks
+  🎵 Separate Music Stems & Transcribe Speech with AI
 </h3>
 
 <p align="center">
-  Break down any song into individual stems for vocals, drums, bass, guitar,
-  piano, and more.
+  Break down any song into individual stems for vocals, drums, bass, guitar, piano, and more.
   <br />
-  Powered by <a href="https://github.com/facebookresearch/demucs">Demucs</a>
-  from Facebook Research.
+  Convert audio and video to text with AI-powered transcription, subtitles, and lyrics generation.
+  <br />
+  Powered by <a href="https://github.com/facebookresearch/demucs">Demucs</a> and <a href="https://github.com/openai/whisper">Whisper</a>
+  from Facebook Research and OpenAI.
 </p>
 
 <p align="center">
   <a href="#features">Features</a> •
   <a href="#how-it-works">How It Works</a> •
   <a href="#ai-models">AI Models</a> •
+  <a href="#transcription">Transcription</a> •
   <a href="#screenshots">Screenshots</a> •
-  <a href="#about-demucs">About Demucs</a> •
   <a href="#tech-stack">Tech Stack</a>
 </p>
 
@@ -29,12 +30,13 @@
 
 | | |
 | - | - |
-| 🎯 **High Quality** | Powered by Demucs, an open-source AI model from Facebook Research |
+| 🎯 **High Quality** | Powered by Demucs and Whisper AI from Facebook Research and OpenAI |
 | ⚡ **Fast Processing** | No need to install anything — just upload your files |
-| 🎨 **Multiple Stem Options** | Choose from 2, 4, or 6 stem separation |
+| 🎨 **Multiple Options** | Stem separation (2, 4, or 6 stems) and speech transcription |
+| 📝 **Transcription** | Convert speech to text, generate subtitles, or extract lyrics |
 | 🔒 **Privacy First** | Files automatically deleted after 24 hours |
 | 💰 **Pay As You Go** | No subscriptions — start with 3 free credits |
-| 🌐 **API Access** | Integrate stem separation into your workflow *(coming soon)* |
+| 🌐 **API Access** | Integrate processing into your workflow *(coming soon)* |
 
 ---
 
@@ -46,14 +48,14 @@
 
 ### 1️⃣ Upload
 
-Upload any audio file — MP3, WAV, FLAC, and more. We support all common formats.
+Upload any audio or video file — MP3, WAV, FLAC, MP4, and more. We support all common formats.
 
 </td>
 <td align="center" width="33%">
 
 ### 2️⃣ Choose
 
-Select the AI model and stem configuration that fits your needs.
+Select the AI model and processing type: stem separation, transcription, subtitles, or lyrics.
 
 </td>
 <td align="center" width="33%">
@@ -106,6 +108,50 @@ Quick isolation of a single element:
 - 🎸 Bass + Everything Else
 
 Models: *htdemucs, htdemucs_ft, htdemucs_6s*
+
+---
+
+## 🎙️ Transcription
+
+Powered by OpenAI's Whisper model, Mux Minus now supports speech-to-text transcription with multiple output formats.
+
+### Basic Transcription (1 credit)
+
+Convert speech from audio or video files to plain text:
+
+- 📝 Automatic language detection
+- 🌍 Supports 99+ languages
+- 📄 Output: Plain text (.txt)
+
+### Timestamped Transcription (1 credit)
+
+Get transcription with precise timestamps:
+
+- ⏱️ Segment-level timestamps
+- 📊 JSON format with metadata
+- 🎬 Perfect for video chapters
+
+### Subtitle Generation (1 credit)
+
+Generate subtitle files for videos:
+
+- 📺 SRT format (SubRip)
+- 🌐 WebVTT format
+- ✅ Ready for video players
+
+### Lyrics from Music (2 credits)
+
+Extract timestamped lyrics from songs:
+
+- 🎤 Two-step pipeline: vocals isolation + transcription
+- 🎵 LRC format with timestamps
+- 🎼 Better accuracy than transcribing full mix
+- 📀 Includes isolated vocals audio file
+
+**Supported Formats:**
+- Audio: MP3, WAV, FLAC, OGG, M4A, AAC
+- Video: MP4, MKV, AVI, MOV, WebM
+- File size limit: 5GB
 
 ---
 

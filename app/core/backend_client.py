@@ -152,6 +152,47 @@ class BackendClient:
                 current_step=data.get("current_step", ""),
             )
     
+    def submit_transcription_job(
+        self,
+        job_id: str,
+        input_path: str,
+        transcription_type: str = "basic",
+        transcription_format: str = "txt",
+        language: Optional[str] = None,
+    ) -> JobStatus:
+        """
+        Submit a new transcription job to the backend.
+        
+        Args:
+            job_id: Unique job identifier
+            input_path: Path to input file (relative to shared uploads dir)
+            transcription_type: Type of transcription (basic, timestamped, subtitles, lyrics)
+            transcription_format: Output format (txt, json, srt, vtt, lrc)
+            language: Language code (e.g., 'en', 'es'). None for auto-detect
+            
+        Returns:
+            JobStatus with initial status
+        """
+        payload = {
+            "job_id": job_id,
+            "input_path": input_path,
+            "transcription_type": transcription_type,
+            "transcription_format": transcription_format,
+        }
+        if language:
+            payload["language"] = language
+        
+        with self._get_client() as client:
+            response = client.post("/transcribe", json=payload)
+            response.raise_for_status()
+            data = response.json()
+            return JobStatus(
+                job_id=data["job_id"],
+                status=data["status"],
+                progress=data.get("progress", 0.0),
+                current_step=data.get("current_step", ""),
+            )
+    
     def get_job_status(self, job_id: str) -> JobStatus:
         """Get the current status of a job."""
         with self._get_client() as client:
