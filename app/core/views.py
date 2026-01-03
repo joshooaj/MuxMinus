@@ -232,7 +232,7 @@ def job_detail(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
         if output_dir and os.path.isdir(output_dir):
             from .models import JobType
             
-            if job.job_type == JobType.SEPARATION or job.job_type == JobType.LYRICS_PIPELINE:
+            if job.job_type == JobType.SEPARATION:
                 # Audio stem files
                 for filename in os.listdir(output_dir):
                     if filename.endswith(('.wav', '.mp3', '.flac')):
@@ -243,27 +243,6 @@ def job_detail(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
                             'stem': stem_name,
                             'type': 'audio',
                         })
-                
-                # Check for transcription files in lyrics pipeline
-                if job.job_type == JobType.LYRICS_PIPELINE:
-                    for filename in os.listdir(output_dir):
-                        if filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
-                            # Get filename without extension for the stem parameter
-                            stem_name = os.path.splitext(filename)[0]
-                            output_files.append({
-                                'name': filename,
-                                'filename': filename,
-                                'stem': stem_name,
-                                'type': 'transcription',
-                            })
-                            
-                            # Load text content for preview
-                            if filename.endswith(('.txt', '.lrc', '.srt', '.vtt')):
-                                try:
-                                    with open(os.path.join(output_dir, filename), 'r', encoding='utf-8') as f:
-                                        transcription_content = f.read()
-                                except Exception:
-                                    pass
             
             elif job.job_type == JobType.TRANSCRIPTION:
                 # Transcription output files
@@ -311,11 +290,11 @@ def create_job(request: HttpRequest) -> HttpResponse:
     - Saves uploaded file to user's upload directory
     - Creates job record in database
     - Submits job to backend service
-    - Deducts appropriate credits (1 for most jobs, 2 for lyrics pipeline)
+    - Deducts 1 credit
     """
     # Check if user can upload (less than 5 queued jobs)
     from .models import JobType, TranscriptionType, TranscriptionFormat
-    from .constants import CREDIT_COST_SEPARATION, CREDIT_COST_TRANSCRIPTION, CREDIT_COST_LYRICS_PIPELINE
+    from .constants import CREDIT_COST_SEPARATION, CREDIT_COST_TRANSCRIPTION
     
     queued_jobs = Job.objects.filter(
         user=request.user, 
@@ -337,7 +316,6 @@ def create_job(request: HttpRequest) -> HttpResponse:
             job_type_map = {
                 'separation': JobType.SEPARATION,
                 'transcription': JobType.TRANSCRIPTION,
-                'lyrics': JobType.LYRICS_PIPELINE,
             }
             job_type_enum = job_type_map[job_type_str]
             
@@ -345,7 +323,6 @@ def create_job(request: HttpRequest) -> HttpResponse:
             credit_cost_map = {
                 JobType.SEPARATION: CREDIT_COST_SEPARATION,
                 JobType.TRANSCRIPTION: CREDIT_COST_TRANSCRIPTION,
-                JobType.LYRICS_PIPELINE: CREDIT_COST_LYRICS_PIPELINE,
             }
             credit_cost = credit_cost_map[job_type_enum]
             
@@ -372,7 +349,6 @@ def create_job(request: HttpRequest) -> HttpResponse:
             job_type_map = {
                 'separation': JobType.SEPARATION,
                 'transcription': JobType.TRANSCRIPTION,
-                'lyrics': JobType.LYRICS_PIPELINE,
             }
             job_type = job_type_map[job_type_str]
             
@@ -395,9 +371,17 @@ def create_job(request: HttpRequest) -> HttpResponse:
                 )
             
             elif job_type == JobType.TRANSCRIPTION:
-                transcription_type = form.cleaned_data['transcription_type']
-                transcription_format = form.cleaned_data['transcription_format']
+                # Get the output format and map to transcription_type and transcription_format
+                transcription_output_format = form.cleaned_data['transcription_output_format']
                 language = form.cleaned_data.get('language') or None
+                
+                # Map output format to internal transcription_type and transcription_format
+                output_format_mapping = {
+                    'txt': ('basic', 'txt'),
+                    'subtitles': ('subtitles', 'srt'),  # Backend generates both SRT and VTT
+                    'lrc': ('lyrics', 'lrc'),
+                }
+                transcription_type, transcription_format = output_format_mapping[transcription_output_format]
                 
                 job = Job.objects.create(
                     user=request.user,
@@ -405,20 +389,6 @@ def create_job(request: HttpRequest) -> HttpResponse:
                     original_filename=audio_file.name,
                     transcription_type=transcription_type,
                     transcription_format=transcription_format,
-                    language=language,
-                    input_path=file_path,
-                    status=JobStatus.QUEUED,
-                )
-            
-            elif job_type == JobType.LYRICS_PIPELINE:
-                language = form.cleaned_data.get('language') or None
-                
-                job = Job.objects.create(
-                    user=request.user,
-                    job_type=job_type,
-                    original_filename=audio_file.name,
-                    transcription_type=TranscriptionType.LYRICS,
-                    transcription_format=TranscriptionFormat.LRC,
                     language=language,
                     input_path=file_path,
                     status=JobStatus.QUEUED,
@@ -445,12 +415,6 @@ def create_job(request: HttpRequest) -> HttpResponse:
                         input_path=relative_path,
                         transcription_type=transcription_type,
                         transcription_format=transcription_format,
-                        language=language,
-                    )
-                elif job_type == JobType.LYRICS_PIPELINE:
-                    backend_client.submit_lyrics_pipeline_job(
-                        job_id=str(job.id),
-                        input_path=relative_path,
                         language=language,
                     )
             except Exception as e:
@@ -537,17 +501,50 @@ def job_status_api(request: HttpRequest, job_id: uuid.UUID) -> JsonResponse:
     if job.status == JobStatus.COMPLETED and job.files_available:
         output_dir = job.output_path
         output_files = []
+        transcription_content = None
+        job_type = job.job_type
+        
         if output_dir and os.path.isdir(output_dir):
-            for filename in os.listdir(output_dir):
-                if filename.endswith(('.wav', '.mp3', '.flac')):
-                    stem_name = os.path.splitext(filename)[0]
-                    output_files.append({
-                        'name': stem_name.title(),
-                        'filename': filename,
-                        'stem': stem_name,
-                        'download_url': f'/jobs/{job_id}/download/{stem_name}/',
-                    })
+            from .models import JobType
+            
+            if job_type == JobType.SEPARATION:
+                # Audio stem files
+                for filename in os.listdir(output_dir):
+                    if filename.endswith(('.wav', '.mp3', '.flac')):
+                        stem_name = os.path.splitext(filename)[0]
+                        output_files.append({
+                            'name': stem_name.title(),
+                            'filename': filename,
+                            'stem': stem_name,
+                            'type': 'audio',
+                            'download_url': f'/jobs/{job_id}/download/{stem_name}/',
+                        })
+            
+            elif job_type == JobType.TRANSCRIPTION:
+                # Transcription output files
+                for filename in os.listdir(output_dir):
+                    if filename.endswith(('.txt', '.json', '.srt', '.vtt', '.lrc')):
+                        stem_name = os.path.splitext(filename)[0]
+                        output_files.append({
+                            'name': filename,
+                            'filename': filename,
+                            'stem': stem_name,
+                            'type': 'transcription',
+                            'download_url': f'/jobs/{job_id}/download/{stem_name}/',
+                        })
+                        
+                        # Load text content for preview (prefer .txt, then .srt/.vtt/.lrc)
+                        if transcription_content is None and filename.endswith(('.txt', '.lrc', '.srt', '.vtt')):
+                            try:
+                                with open(os.path.join(output_dir, filename), 'r', encoding='utf-8') as f:
+                                    transcription_content = f.read()
+                            except Exception:
+                                pass
+        
         response_data['output_files'] = output_files
+        response_data['job_type'] = job_type
+        if transcription_content:
+            response_data['transcription_content'] = transcription_content
     
     return JsonResponse(response_data)
 
@@ -652,9 +649,7 @@ def download_all_stems(request: HttpRequest, job_id: uuid.UUID) -> HttpResponse:
     base_name = job.original_filename.rsplit('.', 1)[0]
     
     # Determine ZIP filename suffix based on job type
-    if job.job_type == JobType.LYRICS_PIPELINE:
-        zip_suffix = "lyrics"
-    elif job.job_type == JobType.TRANSCRIPTION:
+    if job.job_type == JobType.TRANSCRIPTION:
         zip_suffix = "transcription"
     else:
         zip_suffix = "stems"

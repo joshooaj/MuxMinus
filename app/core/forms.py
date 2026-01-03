@@ -127,8 +127,7 @@ class JobCreateForm(forms.Form):
     
     JOB_TYPE_CHOICES = [
         ('separation', 'Audio Separation'),
-        ('transcription', 'Speech-to-Text Transcription'),
-        ('lyrics', 'Lyrics Generation (2 credits)'),
+        ('transcription', 'Speech Transcription'),
     ]
     
     SEPARATION_TYPE_CHOICES = [
@@ -148,17 +147,11 @@ class JobCreateForm(forms.Form):
         ('bass', 'Bass (isolate bass from the rest)'),
     ]
     
-    TRANSCRIPTION_TYPE_CHOICES = [
-        ('basic', 'Basic Text Transcription'),
-        ('timestamped', 'Timestamped Transcription (JSON)'),
-        ('subtitles', 'Subtitle File (SRT/VTT)'),
-    ]
-    
-    TRANSCRIPTION_FORMAT_CHOICES = [
-        ('txt', 'Plain Text (.txt)'),
-        ('json', 'JSON with timestamps (.json)'),
-        ('srt', 'SubRip Subtitles (.srt)'),
-        ('vtt', 'WebVTT Subtitles (.vtt)'),
+    # Simplified transcription output format choices
+    TRANSCRIPTION_OUTPUT_FORMAT_CHOICES = [
+        ('txt', 'Plain Text (TXT)'),
+        ('subtitles', 'Subtitles (SRT, VTT)'),
+        ('lrc', 'Lyrics (LRC)'),
     ]
     
     OUTPUT_FORMAT_CHOICES = [
@@ -213,15 +206,8 @@ class JobCreateForm(forms.Form):
     )
     
     # Transcription-specific fields
-    transcription_type = forms.ChoiceField(
-        choices=TRANSCRIPTION_TYPE_CHOICES,
-        initial='basic',
-        required=False,
-        widget=forms.RadioSelect(attrs={'class': 'form-radio'}),
-    )
-    
-    transcription_format = forms.ChoiceField(
-        choices=TRANSCRIPTION_FORMAT_CHOICES,
+    transcription_output_format = forms.ChoiceField(
+        choices=TRANSCRIPTION_OUTPUT_FORMAT_CHOICES,
         initial='txt',
         required=False,
         widget=forms.RadioSelect(attrs={'class': 'form-radio'}),
@@ -243,7 +229,7 @@ class JobCreateForm(forms.Form):
         
         if audio_file:
             # Check file size based on job type
-            if job_type in ['transcription', 'lyrics']:
+            if job_type == 'transcription':
                 max_size = MAX_UPLOAD_SIZE_TRANSCRIPTION
             else:
                 max_size = MAX_UPLOAD_SIZE_SEPARATION
@@ -254,7 +240,7 @@ class JobCreateForm(forms.Form):
             
             # Check file extension
             allowed_extensions = ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac', '.wma', '.aiff']
-            if job_type in ['transcription', 'lyrics']:
+            if job_type == 'transcription':
                 allowed_extensions.extend(['.mp4', '.mkv', '.avi', '.mov', '.webm'])
             
             ext = '.' + audio_file.name.lower().split('.')[-1] if '.' in audio_file.name else ''
@@ -267,8 +253,6 @@ class JobCreateForm(forms.Form):
         cleaned_data = super().clean()
         job_type = cleaned_data.get('job_type')
         separation_type = cleaned_data.get('separation_type')
-        transcription_type = cleaned_data.get('transcription_type')
-        transcription_format = cleaned_data.get('transcription_format')
         two_stem = cleaned_data.get('two_stem')
         
         # Validate separation options
@@ -279,15 +263,5 @@ class JobCreateForm(forms.Form):
             # Clear two_stem if doing full separation
             if separation_type == 'full':
                 cleaned_data['two_stem'] = None
-        
-        # Validate transcription options
-        if job_type == 'transcription':
-            # Match transcription type with format
-            if transcription_type == 'basic' and transcription_format != 'txt':
-                cleaned_data['transcription_format'] = 'txt'
-            elif transcription_type == 'timestamped' and transcription_format != 'json':
-                cleaned_data['transcription_format'] = 'json'
-            elif transcription_type == 'subtitles' and transcription_format not in ['srt', 'vtt']:
-                cleaned_data['transcription_format'] = 'srt'
         
         return cleaned_data

@@ -223,15 +223,14 @@ class TranscriptionService:
             output_files["transcription"] = output_path
             
         elif transcription_type == TranscriptionType.SUBTITLES:
-            # SRT or VTT subtitle files
-            if transcription_format == TranscriptionFormat.SRT:
-                output_path = output_dir / "subtitles.srt"
-                self._write_srt(result, output_path)
-            else:  # VTT
-                output_path = output_dir / "subtitles.vtt"
-                self._write_vtt(result, output_path)
+            # Generate both SRT and VTT subtitle files
+            srt_path = output_dir / "subtitles.srt"
+            vtt_path = output_dir / "subtitles.vtt"
+            self._write_srt(result, srt_path)
+            self._write_vtt(result, vtt_path)
             
-            output_files["subtitles"] = output_path
+            output_files["subtitles_srt"] = srt_path
+            output_files["subtitles_vtt"] = vtt_path
             
         elif transcription_type == TranscriptionType.LYRICS:
             # LRC lyrics file

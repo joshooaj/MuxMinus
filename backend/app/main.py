@@ -23,7 +23,6 @@ from .models import (
     JobStatus,
     ModelChoice,
     TranscriptionRequest,
-    LyricsPipelineRequest,
     JobType,
 )
 from .queue import job_queue
@@ -330,71 +329,6 @@ async def create_transcription_job(
             job_type=JobType.TRANSCRIPTION,
             transcription_type=request.transcription_type,
             transcription_format=request.transcription_format,
-            language=request.language,
-        )
-        
-        return JobStatusResponse(
-            job_id=job.job_id,
-            status=job.status,
-            progress=job.progress,
-            current_step=job.current_step,
-            created_at=job.created_at,
-        )
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.post("/lyrics", response_model=JobStatusResponse, tags=["Transcription"])
-async def create_lyrics_pipeline_job(
-    request: LyricsPipelineRequest,
-    _: bool = Depends(verify_api_key),
-):
-    """
-    Submit a new lyrics pipeline job (Demucs vocal isolation + Whisper transcription).
-    
-    This job type costs 2 credits as it performs both vocal separation and transcription.
-    The job will be queued and processed asynchronously. Use the
-    GET /jobs/{job_id} endpoint to check the status and retrieve results.
-    """
-    # Check if queue can accept jobs
-    if not job_queue.can_accept_jobs:
-        raise HTTPException(
-            status_code=503,
-            detail="Job queue is full. Please try again later.",
-        )
-    
-    # Construct input path
-    input_path = settings.uploads_dir / request.input_path
-    
-    # Verify input file exists
-    if not input_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Input file not found: {request.input_path}",
-        )
-    
-    # Check file size (max 5GB for lyrics pipeline)
-    if input_path.stat().st_size > settings.max_upload_size_transcription:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File size exceeds 5GB limit for lyrics pipeline jobs",
-        )
-    
-    # Check if job already exists
-    existing_job = job_queue.get_job(request.job_id)
-    if existing_job:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Job {request.job_id} already exists",
-        )
-    
-    try:
-        # Submit job to queue
-        job = await job_queue.submit(
-            job_id=request.job_id,
-            input_path=input_path,
-            job_type=JobType.LYRICS_PIPELINE,
             language=request.language,
         )
         

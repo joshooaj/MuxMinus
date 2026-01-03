@@ -9,7 +9,7 @@ The Mux Minus service has been extended to support audio and video transcription
 1. Basic text transcription
 2. Timestamped transcription (JSON format)
 3. Subtitle generation (SRT/VTT formats)
-4. Lyrics extraction from music (LRC format with vocals isolation pipeline)
+4. Lyrics extraction (LRC format)
 
 ## Backend Changes
 
@@ -26,24 +26,19 @@ The Mux Minus service has been extended to support audio and video transcription
 ### Modified Files
 
 **`backend/app/models.py`**:
-- Added `JobType` enum: `SEPARATION`, `TRANSCRIPTION`, `LYRICS_PIPELINE`
+- Added `JobType` enum: `SEPARATION`, `TRANSCRIPTION`
 - Added `TranscriptionType` enum: `BASIC`, `TIMESTAMPED`, `SUBTITLES`, `LYRICS`
 - Added `TranscriptionFormat` enum: `TEXT`, `JSON`, `SRT`, `VTT`, `LRC`
 - Added `TranscriptionRequest` Pydantic model
-- Added `LyricsPipelineRequest` Pydantic model
 
 **`backend/app/queue.py`**:
 - Extended `Job` dataclass to support all job types with transcription fields
 - Added `_process_transcription()` method for handling transcription jobs
-- Added `_process_lyrics_pipeline()` method for two-step lyrics generation:
-  1. Isolate vocals using Demucs (2-stem separation)
-  2. Transcribe vocals to LRC lyrics using Whisper
 - Updated `submit()` method to accept job type and transcription parameters
 
 **`backend/app/main.py`**:
 - Added `/transcribe` endpoint for submitting transcription jobs
-- Added `/lyrics` endpoint for submitting lyrics pipeline jobs
-- Both endpoints enforce 5GB file size limit
+- Enforces 5GB file size limit for transcription
 - Existing `/jobs` endpoint continues to handle separation jobs
 
 ## Frontend Changes
@@ -58,28 +53,25 @@ The Mux Minus service has been extended to support audio and video transcription
   - `transcription_format`: Output format (if applicable)
   - `language`: Language code for transcription
 - Made `model` field nullable (only required for separation jobs)
-- Added `credit_cost` property (returns 2 for lyrics pipeline, 1 for others)
 
 **`app/core/migrations/0004_add_transcription_support.py`**:
 - Migration to add new fields to Job model
 
 **`app/core/forms.py`**:
 - Extended `JobCreateForm` to support transcription job types
-- Added job type selection (separation, transcription, lyrics)
+- Added job type selection (separation, transcription)
 - Added transcription-specific fields (type, format, language)
 - Updated file validation:
   - 100MB limit for separation jobs
-  - 5GB limit for transcription and lyrics jobs
+  - 5GB limit for transcription jobs
   - Added video format support (.mp4, .mkv, .avi, etc.)
 
 **`app/core/backend_client.py`**:
 - Added `submit_transcription_job()` method
-- Added `submit_lyrics_pipeline_job()` method
 
 **`app/core/views.py`**:
 - Updated `create_job()` view:
   - Routes to appropriate backend endpoint based on job type
-  - Implements variable credit cost (1 or 2 credits)
   - Creates job with appropriate fields based on type
 - Updated `job_detail()` view:
   - Displays transcription output files
@@ -92,7 +84,7 @@ The Mux Minus service has been extended to support audio and video transcription
   - Basic transcription
   - Timestamped text
   - Subtitle generation
-  - Lyrics from songs
+  - Lyrics (LRC)
 
 ## Features Implemented
 
@@ -111,26 +103,20 @@ The Mux Minus service has been extended to support audio and video transcription
 - Supports both SRT and WebVTT formats
 - Output: `.srt` or `.vtt` file
 
-### 4. Lyrics Pipeline (2 credits)
-- Two-step process:
-  1. Isolates vocals using Demucs 2-stem separation
-  2. Transcribes vocals to timestamped lyrics
-- Better accuracy than transcribing full mix
-- Output: `.lrc` lyrics file + isolated vocals audio file
+### 4. Lyrics Generation (1 credit)
+- Generates timestamped lyrics in LRC format
+- Whisper transcribes directly from audio
+- Output: `.lrc` lyrics file
 
 ## Credit System
 
 - **Separation jobs**: 1 credit
 - **Transcription jobs**: 1 credit
-- **Lyrics pipeline jobs**: 2 credits (Demucs + Whisper)
-
-The `Job.credit_cost` property automatically returns the correct cost based on job type.
 
 ## File Size Limits
 
 - **Separation jobs**: 100MB (unchanged)
 - **Transcription jobs**: 5GB (to accommodate video files)
-- **Lyrics pipeline jobs**: 5GB
 
 ## Supported File Formats
 
@@ -151,15 +137,6 @@ The `Job.credit_cost` property automatically returns the correct cost based on j
   "input_path": "user_id/filename.mp3",
   "transcription_type": "basic|timestamped|subtitles|lyrics",
   "transcription_format": "txt|json|srt|vtt|lrc",
-  "language": "en" // optional, null for auto-detect
-}
-```
-
-**POST /lyrics**
-```json
-{
-  "job_id": "uuid",
-  "input_path": "user_id/song.mp3",
   "language": "en" // optional, null for auto-detect
 }
 ```

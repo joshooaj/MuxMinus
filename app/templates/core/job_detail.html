@@ -223,27 +223,68 @@
     function renderCompletedContent(data) {
         const contentEl = document.getElementById('job-content');
         const files = data.output_files || [];
+        const jobType = data.job_type || 'separation';
+        const transcriptionContent = data.transcription_content;
         
-        let stemsHtml = '';
-        files.forEach(file => {
-            const icon = stemIcons[file.stem] || '🎵';
-            stemsHtml += `
-                <div class="card stem-card">
+        let transcriptionPreviewHtml = '';
+        if (transcriptionContent) {
+            // Escape HTML entities for safe display
+            const escapedContent = transcriptionContent
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            
+            transcriptionPreviewHtml = `
+                <div class="card mb-4" style="background: var(--bg-secondary);">
                     <div class="card-header">
-                        <h4>${icon} ${file.name}</h4>
+                        <h4>📝 Transcription Preview</h4>
                     </div>
                     <div class="card-body">
-                        <div class="stem-player" 
-                             data-waveform 
-                             data-src="${file.download_url}">
-                        </div>
-                        <a href="${file.download_url}" class="btn btn-sm btn-outline mt-2" download>
-                            ⬇️ Download
-                        </a>
+                        <pre style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto; background: var(--bg-primary); padding: 1rem; border-radius: 4px;">${escapedContent}</pre>
                     </div>
                 </div>
             `;
-        });
+        }
+        
+        let filesHtml = '';
+        if (jobType === 'separation') {
+            // Audio stems grid
+            let stemsHtml = '';
+            files.forEach(file => {
+                const icon = stemIcons[file.stem] || '🎵';
+                stemsHtml += `
+                    <div class="card stem-card">
+                        <div class="card-header">
+                            <h4>${icon} ${file.name}</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="stem-player" 
+                                 data-waveform 
+                                 data-src="${file.download_url}">
+                            </div>
+                            <a href="${file.download_url}" class="btn btn-sm btn-outline mt-2" download>
+                                ⬇️ Download
+                            </a>
+                        </div>
+                    </div>
+                `;
+            });
+            filesHtml = `<div class="stems-grid">${stemsHtml}</div>`;
+        } else if (jobType === 'transcription') {
+            // Transcription files list
+            files.forEach(file => {
+                filesHtml += `
+                    <div class="card mt-3" style="background: var(--bg-secondary);">
+                        <div class="card-body">
+                            <strong>📄 ${file.name}</strong>
+                            <a href="${file.download_url}" class="btn btn-sm btn-outline ml-2" download>
+                                ⬇️ Download
+                            </a>
+                        </div>
+                    </div>
+                `;
+            });
+        }
         
         contentEl.innerHTML = `
             <div class="card">
@@ -255,9 +296,8 @@
                         Files available for 24 hours
                     </p>
                     
-                    <div class="stems-grid">
-                        ${stemsHtml}
-                    </div>
+                    ${transcriptionPreviewHtml}
+                    ${filesHtml}
                     
                     <div class="mt-4">
                         <a href="/jobs/${jobId}/download-all/" class="btn btn-primary" download>

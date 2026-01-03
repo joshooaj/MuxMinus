@@ -70,7 +70,6 @@ class JobType(models.TextChoices):
     """Job processing type."""
     SEPARATION = 'separation', 'Audio Separation'
     TRANSCRIPTION = 'transcription', 'Transcription'
-    LYRICS_PIPELINE = 'lyrics_pipeline', 'Lyrics Generation'
 
 
 class TranscriptionType(models.TextChoices):
@@ -166,9 +165,7 @@ class Job(models.Model):
     @property
     def credit_cost(self):
         """Calculate the credit cost for this job type."""
-        if self.job_type == JobType.LYRICS_PIPELINE:
-            return 2  # Lyrics pipeline costs 2 credits (demucs + whisper)
-        return 1  # All other jobs cost 1 credit
+        return 1  # All jobs cost 1 credit
 
 
 class CreditPackage(models.Model):

@@ -28,8 +28,6 @@ logger = logging.getLogger(__name__)
 
 # Progress scaling constants
 SEPARATION_PROGRESS_SCALE = 0.9  # Reserve 10% for finalization
-LYRICS_PIPELINE_VOCALS_PROGRESS = 0.5  # First 50% for vocal separation
-LYRICS_PIPELINE_TRANSCRIBE_PROGRESS = 0.5  # Second 50% for transcription
 
 
 @dataclass
@@ -158,8 +156,6 @@ class JobQueue:
                 await self._process_separation(job)
             elif job.job_type == JobType.TRANSCRIPTION:
                 await self._process_transcription(job)
-            elif job.job_type == JobType.LYRICS_PIPELINE:
-                await self._process_lyrics_pipeline(job)
             else:
                 raise ValueError(f"Unknown job type: {job.job_type}")
             
@@ -234,73 +230,6 @@ class JobQueue:
         # Update job with results
         job.output_files = [str(p.relative_to(settings.outputs_dir)) for p in output_files.values()]
     
-    async def _process_lyrics_pipeline(self, job: Job):
-        """Process a lyrics pipeline job (Demucs -> Whisper)."""
-        # Step 1: Separate vocals using Demucs
-        job.current_step = "Isolating vocals (step 1/2)"
-        job.progress = 0.0
-        
-        def separation_progress(info: dict):
-            # First 50% is separation
-            job.progress = info.get("progress", 0) * LYRICS_PIPELINE_VOCALS_PROGRESS
-            job.current_step = f"Isolating vocals ({info.get('state', 'processing')})"
-        
-        loop = asyncio.get_event_loop()
-        
-        # Separate vocals directly to the main output directory (not a subdirectory)
-        # Use fine-tuned model with higher quality settings for better transcription
-        lyrics_model = ModelChoice(settings.lyrics_model)
-        separation_output = await loop.run_in_executor(
-            None,
-            lambda: separation_service.separate(
-                input_path=job.input_path,
-                output_dir=job.output_dir,  # Save directly to output_dir
-                model=lyrics_model,
-                two_stem=StemChoice.VOCALS,
-                output_format=OutputFormat.WAV,  # Use WAV for better Whisper accuracy
-                progress_callback=separation_progress,
-                shifts=settings.lyrics_shifts,
-                overlap=settings.lyrics_overlap,
-            )
-        )
-        
-        # Get the vocals file
-        vocals_file = separation_output.get("vocals")
-        if not vocals_file:
-            raise RuntimeError("Failed to isolate vocals")
-        
-        job.vocals_path = vocals_file
-        logger.info(f"Vocals isolated to: {vocals_file}")
-        
-        # Step 2: Transcribe vocals to LRC
-        job.current_step = "Generating lyrics (step 2/2)"
-        job.progress = 50.0
-        
-        def transcription_progress(info: dict):
-            # Second 50% is transcription
-            job.progress = 50.0 + (info.get("progress", 0) * LYRICS_PIPELINE_TRANSCRIBE_PROGRESS)
-            state = info.get("state", "processing")
-            job.current_step = f"Generating lyrics ({state})"
-        
-        # Transcribe to LRC format
-        transcription_output = await loop.run_in_executor(
-            None,
-            lambda: transcription_service.transcribe(
-                input_path=vocals_file,
-                output_dir=job.output_dir,
-                transcription_type=TranscriptionType.LYRICS,
-                transcription_format=TranscriptionFormat.LRC,
-                language=job.language,
-                progress_callback=transcription_progress,
-            )
-        )
-        
-        # Update job with results (both vocals and lyrics)
-        output_files = []
-        output_files.append(str(vocals_file.relative_to(settings.outputs_dir)))
-        output_files.extend([str(p.relative_to(settings.outputs_dir)) for p in transcription_output.values()])
-        job.output_files = output_files
-    
     async def submit(
         self,
         job_id: str,
@@ -319,7 +248,7 @@ class JobQueue:
         Args:
             job_id: Unique job identifier
             input_path: Path to input audio/video file
-            job_type: Type of job (separation, transcription, lyrics_pipeline)
+            job_type: Type of job (separation or transcription)
             model: Demucs model to use (for separation jobs)
             two_stem: Optional stem for two-stem separation
             output_format: Output audio format

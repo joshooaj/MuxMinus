@@ -48,7 +48,6 @@ class JobType(str, Enum):
     """Job processing type."""
     SEPARATION = "separation"  # Audio stem separation
     TRANSCRIPTION = "transcription"  # Speech-to-text transcription
-    LYRICS_PIPELINE = "lyrics_pipeline"  # Demucs + Whisper for lyrics
 
 
 class JobStatus(str, Enum):
@@ -94,22 +93,6 @@ class TranscriptionRequest(BaseModel):
                 "input_path": "1/video.mp4",
                 "transcription_type": "basic",
                 "transcription_format": "txt",
-                "language": None
-            }
-        }
-
-
-class LyricsPipelineRequest(BaseModel):
-    """Request to create a lyrics generation pipeline job (Demucs + Whisper)."""
-    job_id: str = Field(..., description="Unique job identifier from frontend")
-    input_path: str = Field(..., description="Path to input audio file (relative to uploads dir)")
-    language: Optional[str] = Field(default=None, description="Language code for lyrics. None for auto-detect")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "job_id": "550e8400-e29b-41d4-a716-446655440002",
-                "input_path": "1/song.mp3",
                 "language": None
             }
         }

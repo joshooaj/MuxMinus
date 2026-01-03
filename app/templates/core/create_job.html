@@ -46,18 +46,6 @@
                                         <div class="radio-card-meta">1 credit</div>
                                     </div>
                                 </label>
-                                <label class="radio-card" data-job-type="lyrics">
-                                    <input type="radio" name="job_type" value="lyrics"
-                                           {% if form.job_type.value == 'lyrics' %}checked{% endif %}>
-                                    <div class="radio-card-content">
-                                        <div class="radio-card-badge">2 Steps</div>
-                                        <div class="radio-card-title">🎤 Lyrics Generation</div>
-                                        <div class="radio-card-desc">
-                                            Extract timestamped lyrics from songs (isolates vocals first)
-                                        </div>
-                                        <div class="radio-card-meta">2 credits</div>
-                                    </div>
-                                </label>
                             </div>
                         </div>
                     </div>
@@ -240,71 +228,40 @@
                     <!-- TRANSCRIPTION OPTIONS -->
                     <div id="transcription-options" class="job-type-options" style="display: none;">
                     
-                    <!-- Transcription Type -->
+                    <!-- Output Format -->
                     <div class="card mb-3">
                         <div class="card-header">
-                            <h3>📝 Transcription Type</h3>
+                            <h3>📝 Output Format</h3>
                         </div>
                         <div class="card-body">
                             <div class="radio-cards">
                                 <label class="radio-card">
-                                    <input type="radio" name="transcription_type" value="basic"
-                                           {% if form.transcription_type.value == 'basic' or not form.transcription_type.value %}checked{% endif %}>
+                                    <input type="radio" name="transcription_output_format" value="txt"
+                                           {% if form.transcription_output_format.value == 'txt' or not form.transcription_output_format.value %}checked{% endif %}>
                                     <div class="radio-card-content">
-                                        <div class="radio-card-title">Basic Text</div>
+                                        <div class="radio-card-title">Plain Text (TXT)</div>
                                         <div class="radio-card-desc">
-                                            Convert speech to plain text (.txt file)
+                                            Simple text file with the full transcription
                                         </div>
                                     </div>
                                 </label>
                                 <label class="radio-card">
-                                    <input type="radio" name="transcription_type" value="timestamped"
-                                           {% if form.transcription_type.value == 'timestamped' %}checked{% endif %}>
+                                    <input type="radio" name="transcription_output_format" value="subtitles"
+                                           {% if form.transcription_output_format.value == 'subtitles' %}checked{% endif %}>
                                     <div class="radio-card-content">
-                                        <div class="radio-card-title">Timestamped Transcript</div>
+                                        <div class="radio-card-title">Subtitles (SRT, VTT)</div>
                                         <div class="radio-card-desc">
-                                            Get text with precise timestamps (.json file)
+                                            Generates both SRT and VTT subtitle files for maximum compatibility
                                         </div>
                                     </div>
                                 </label>
                                 <label class="radio-card">
-                                    <input type="radio" name="transcription_type" value="subtitles"
-                                           {% if form.transcription_type.value == 'subtitles' %}checked{% endif %}>
+                                    <input type="radio" name="transcription_output_format" value="lrc"
+                                           {% if form.transcription_output_format.value == 'lrc' %}checked{% endif %}>
                                     <div class="radio-card-content">
-                                        <div class="radio-card-title">Subtitle File</div>
+                                        <div class="radio-card-title">Lyrics (LRC)</div>
                                         <div class="radio-card-desc">
-                                            Generate SRT or VTT subtitles for videos
-                                        </div>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Transcription Format (shown for subtitles) -->
-                    <div class="card mb-3" id="transcription-format-card">
-                        <div class="card-header">
-                            <h3>💾 Subtitle Format</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="radio-cards">
-                                <label class="radio-card">
-                                    <input type="radio" name="transcription_format" value="srt"
-                                           {% if form.transcription_format.value == 'srt' or not form.transcription_format.value %}checked{% endif %}>
-                                    <div class="radio-card-content">
-                                        <div class="radio-card-title">SRT (SubRip)</div>
-                                        <div class="radio-card-desc">
-                                            Most widely supported subtitle format
-                                        </div>
-                                    </div>
-                                </label>
-                                <label class="radio-card">
-                                    <input type="radio" name="transcription_format" value="vtt"
-                                           {% if form.transcription_format.value == 'vtt' %}checked{% endif %}>
-                                    <div class="radio-card-content">
-                                        <div class="radio-card-title">VTT (WebVTT)</div>
-                                        <div class="radio-card-desc">
-                                            Modern format for web video players
+                                            Timestamped lyrics for music players and karaoke apps
                                         </div>
                                     </div>
                                 </label>
@@ -326,39 +283,6 @@
                     </div>
                     
                     </div><!-- End transcription options -->
-                    
-                    <!-- LYRICS OPTIONS -->
-                    <div id="lyrics-options" class="job-type-options" style="display: none;">
-                    
-                    <div class="card mb-3">
-                        <div class="card-header">
-                            <h3>🎤 Lyrics Pipeline</h3>
-                        </div>
-                        <div class="card-body">
-                            <p>This job will:</p>
-                            <ol class="pipeline-steps">
-                                <li><strong>Step 1:</strong> Isolate vocals from the music using Demucs</li>
-                                <li><strong>Step 2:</strong> Generate timestamped lyrics (LRC format) from the vocals</li>
-                            </ol>
-                            <p class="form-hint">You'll receive both the isolated vocals audio file and the lyrics file.</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Language for Lyrics -->
-                    <div class="card mb-3">
-                        <div class="card-header">
-                            <h3>🌍 Language</h3>
-                        </div>
-                        <div class="card-body">
-                            {{ form.language }}
-                            <p class="form-hint">Leave blank for automatic language detection</p>
-                            {% if form.language.errors %}
-                            <div class="form-error">{{ form.language.errors }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    </div><!-- End lyrics options -->
                     
                     <!-- Submit -->
                     <div class="form-actions">
@@ -432,8 +356,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const jobTypeRadios = document.querySelectorAll('input[name="job_type"]');
     const separationOptions = document.getElementById('separation-options');
     const transcriptionOptions = document.getElementById('transcription-options');
-    const lyricsOptions = document.getElementById('lyrics-options');
-    const transcriptionFormatCard = document.getElementById('transcription-format-card');
     
     function updateJobTypeDisplay() {
         const selectedJobType = document.querySelector('input[name="job_type"]:checked').value;
@@ -441,7 +363,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Hide all option groups
         separationOptions.style.display = 'none';
         transcriptionOptions.style.display = 'none';
-        lyricsOptions.style.display = 'none';
         
         // Show relevant options
         if (selectedJobType === 'separation') {
@@ -454,33 +375,11 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadHint.textContent = 'Audio/Video: MP3, WAV, MP4, MKV, AVI (max 5GB)';
             btnCost.textContent = '(1 credit)';
             processingHint.textContent = 'Transcription typically takes 2-10 minutes depending on file length.';
-        } else if (selectedJobType === 'lyrics') {
-            lyricsOptions.style.display = 'block';
-            uploadHint.textContent = 'Audio: MP3, WAV, FLAC, OGG, M4A (max 5GB)';
-            btnCost.textContent = '(2 credits)';
-            processingHint.textContent = 'Lyrics generation involves 2 steps and typically takes 3-10 minutes.';
-        }
-        
-        updateTranscriptionFormatDisplay();
-    }
-    
-    function updateTranscriptionFormatDisplay() {
-        const transcriptionType = document.querySelector('input[name="transcription_type"]:checked');
-        if (transcriptionType && transcriptionType.value === 'subtitles') {
-            transcriptionFormatCard.style.display = 'block';
-        } else {
-            transcriptionFormatCard.style.display = 'none';
         }
     }
     
     jobTypeRadios.forEach(radio => {
         radio.addEventListener('change', updateJobTypeDisplay);
-    });
-    
-    // Transcription type switching
-    const transcriptionTypeRadios = document.querySelectorAll('input[name="transcription_type"]');
-    transcriptionTypeRadios.forEach(radio => {
-        radio.addEventListener('change', updateTranscriptionFormatDisplay);
     });
     
     // Initialize display
